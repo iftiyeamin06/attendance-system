@@ -138,6 +138,7 @@ app.get('/employee/dashboard', requireWebAuth, async (req, res) => {
   res.render('employee/dashboard', {
     user: req.session.user,
     token: req.session.token,
+    deviceId: req.user?.boundDeviceId || req.session?.deviceId || '',
   });
 });
 

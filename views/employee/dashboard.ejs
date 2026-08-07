@@ -163,7 +163,7 @@
     <script>
         const API_BASE = '/api';
         const AUTH_TOKEN = '<%= token || "" %>';
-        const DEVICE_ID = '<%= deviceId || "" %>';
+        const DEVICE_ID = '<%= typeof deviceId !== "undefined" ? deviceId : "" %>';
         const DAKHA_TIME_ZONE = 'Asia/Dhaka';
 
         function dhakaDateParts(date = new Date()) {
