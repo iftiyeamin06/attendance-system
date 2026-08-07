@@ -87,7 +87,9 @@ function computeShiftDate(date) {
   const { year, month, day, hour } = getZonedDateParts(date);
   const shifted = new Date(Date.UTC(year, month - 1, day));
 
-  if (hour < 6) {
+  // Shifts starting before noon are the previous day. For 9 PM-5 AM shifts,
+  // any clock-in before noon belongs to today's (previous) shift.
+  if (hour < 12) {
     shifted.setUTCDate(shifted.getUTCDate() - 1);
   }
 

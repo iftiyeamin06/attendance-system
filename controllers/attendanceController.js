@@ -226,8 +226,8 @@ async function getTodayStatus(req, res) {
     });
 
     const [startHour, startMin] = officeStartTime.split(':').map(Number);
-    const deadline = new Date(today);
-    deadline.setHours(startHour, startMin + graceMinutes, 0, 0);
+    const [shiftYear, shiftMonth, shiftDay] = log.shiftDate.split('-');
+    const deadline = new Date(Date.UTC(+shiftYear, +shiftMonth - 1, +shiftDay, startHour, startMin + graceMinutes, 0));
 
     if (!log) {
       return res.json({

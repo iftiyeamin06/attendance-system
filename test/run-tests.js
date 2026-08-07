@@ -193,8 +193,12 @@ async function runTests() {
     computeShiftDate(day2Early) === '2026-08-06', `Got: ${computeShiftDate(day2Early)}`);
 
   const after = new Date('2026-08-07T09:00:00');
-  test('shift_date for clock-in 09:00 -> same day',
-    computeShiftDate(after) === '2026-08-07', `Got: ${computeShiftDate(after)}`);
+  test('shift_date for clock-in 09:00 - previous day (noon cutoff)',
+    computeShiftDate(after) === '2026-08-06', `Got: ${computeShiftDate(after)}`);
+
+  const afterNoon = new Date('2026-08-07T13:00:00');
+  test('shift_date for clock-in 13:00 = same day (noon cutoff)',
+    computeShiftDate(afterNoon) === '2026-08-07', `Got: ${computeShiftDate(afterNoon)}`);
 
   const dur = calculateDuration(day1, day2Early);
   test('duration 20:00 to 05:00 next day = 9h',

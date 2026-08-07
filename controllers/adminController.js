@@ -649,8 +649,8 @@ async function getEmployeeMonthlySummary(req, res) {
         }
 
         if (clockIn) {
-          const deadline = new Date(d);
-          deadline.setHours(startH, startM + graceMinutes, 0, 0);
+          const [shiftYear, shiftMonth, shiftDay] = log.shiftDate.split('-');
+          const deadline = new Date(Date.UTC(+shiftYear, +shiftMonth - 1, +shiftDay, startH, startM + graceMinutes, 0));
           if (new Date(clockIn) > deadline) {
             isLate = true;
             lateMin = Math.floor((new Date(clockIn) - deadline) / 60000);
@@ -869,8 +869,8 @@ async function getAllEmployeesMonthlySummary(req, res) {
           kpiTotalShifts++;
 
           if (clockIn) {
-            const deadline = new Date(d);
-            deadline.setHours(startH, startM + graceMinutes, 0, 0);
+            const [shiftYear, shiftMonth, shiftDay] = dayLog.shiftDate.split('-');
+            const deadline = new Date(Date.UTC(+shiftYear, +shiftMonth - 1, +shiftDay, startH, startM + graceMinutes, 0));
             const isLate = clockIn > deadline;
             if (isLate) {
               lateCount++;
