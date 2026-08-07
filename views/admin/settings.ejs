@@ -12,38 +12,6 @@
             </div>
 
             <form id="settings-form" class="space-y-6">
-                <!-- IP Network Card -->
-                <div class="surface-card p-6">
-                    <div class="flex items-center space-x-3 mb-4 pb-3 border-b border-slate-100">
-                        <i class="fa-solid fa-network-wired text-indigo-500 text-sm"></i>
-                        <h3 class="text-sm font-extrabold text-slate-900 uppercase tracking-wider">Network Restriction (Office Public IP)</h3>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                        <div>
-                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Office Public IP Address</label>
-                            <div class="relative">
-                                <i class="fa-solid fa-globe absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                                <input type="text" id="office-ip-input"
-                                    class="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:border-indigo-500 focus:bg-white transition"
-                                    placeholder="e.g. 192.168.1.100">
-                            </div>
-                            <p class="text-xs text-slate-400 mt-2 font-medium flex items-center space-x-1">
-                                <span>Active IP Binding:</span>
-                                <span id="current-ip" class="font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md"></span>
-                            </p>
-                        </div>
-
-                        <div class="bg-slate-50 border border-slate-200/80 p-4 rounded-xl text-xs text-slate-500 space-y-1 font-medium">
-                            <p class="font-bold text-slate-800 flex items-center space-x-1">
-                                <i class="fa-solid fa-shield-halved text-indigo-500 mr-1"></i>
-                                <span>IP Verification Protocol</span>
-                            </p>
-                            <p>Clock ins outside this public IP will be flagged as remote/unauthorized unless IP bypass is configured.</p>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Shift Hours & Grace Period Card -->
                 <div class="surface-card p-6">
                     <div class="flex items-center space-x-3 mb-4 pb-3 border-b border-slate-100">
@@ -104,11 +72,6 @@
                 document.getElementById('office-end-time').value = data.data.office_end_time || '17:00';
                 document.getElementById('grace-period').value = data.data.grace_period_minutes || 10;
 
-                const dashResponse = await fetchWithAuth(`${API_BASE}/admin/dashboard`);
-                const dashData = await dashResponse.json();
-                document.getElementById('office-ip-input').value = dashData.data.office_ip;
-                document.getElementById('current-ip').textContent = dashData.data.office_ip;
-
                 updateLateAfterText();
             } catch (err) { console.error(err); }
         }
@@ -128,18 +91,11 @@
 
         document.getElementById('settings-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const ip = document.getElementById('office-ip-input').value.trim();
             const startTime = document.getElementById('office-start-time').value;
             const endTime = document.getElementById('office-end-time').value;
             const gracePeriod = document.getElementById('grace-period').value;
 
-            if (!ip) { alert('Please enter a valid IP address'); return; }
-
             try {
-                await fetchWithAuth(`${API_BASE}/admin/settings/ip`, {
-                    method: 'POST',
-                    body: JSON.stringify({ office_public_ip: ip }),
-                });
                 await fetchWithAuth(`${API_BASE}/admin/settings/office-time`, {
                     method: 'POST',
                     body: JSON.stringify({

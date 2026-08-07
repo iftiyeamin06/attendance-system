@@ -115,9 +115,10 @@
         async function loadReport() {
             const month = document.getElementById('month-select').value;
             const year = document.getElementById('year-select').value;
+            const monthNum = parseInt(month) + 1;
 
             try {
-                const response = await fetchWithAuth(`${API_BASE}/admin/report/summary?month=${month}&year=${year}`);
+                const response = await fetchWithAuth(`${API_BASE}/admin/report/summary?month=${monthNum}&year=${year}`);
                 const data = await response.json();
 
                 if (data.success) {
@@ -196,13 +197,14 @@
         async function exportReport() {
             const month = document.getElementById('month-select').value;
             const year = document.getElementById('year-select').value;
+            const monthNum = parseInt(month) + 1;
             try {
-                const response = await fetchWithAuth(`${API_BASE}/admin/report/export?month=${month}&year=${year}`);
+                const response = await fetchWithAuth(`${API_BASE}/admin/report/export?month=${monthNum}&year=${year}`);
                 const blob = await response.blob();
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `monthly_report_${year}-${String(parseInt(month) + 1).padStart(2, '0')}.csv`;
+                a.download = `monthly_report_${year}-${String(monthNum).padStart(2, '0')}.csv`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
