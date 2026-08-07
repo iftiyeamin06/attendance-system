@@ -312,11 +312,7 @@
                         : '';
                     container.innerHTML = `
                         <div class="w-full space-y-2">
-                            <div class="flex items-center justify-between">
-                                <span class="badge-pill badge-present"><span class="badge-dot"></span>ACTIVE SESSION (CLOCKED IN)</span>
-                                ${data.is_late ? `<span class="badge-pill badge-late"><span class="badge-dot"></span>Late by ${data.late_minutes}m</span>` : ''}
-                                ${partialBadge}
-                            </div>
+                           
                             <p class="text-xs text-slate-500 font-medium mt-1">Clocked in at <b class="text-slate-800">${formatDhakaTime(data.clock_in_time)}</b></p>
                         </div>
                     `;
@@ -334,13 +330,7 @@
                         ? `<p class="text-xs text-indigo-600 font-semibold mt-1">Partial leave approved (${pl.from} - ${pl.to}).</p>`
                         : '';
                     container.innerHTML = `
-                        <div class="w-full">
-                            <div class="flex items-center space-x-2">
-                                <span class="badge-pill badge-neutral"><span class="badge-dot"></span>NOT CLOCKED IN</span>
-                            </div>
-                            <p class="text-xs text-slate-500 font-medium mt-2">Shift starts at <b>${effectiveStart}</b>. Marked late after <b>${deadlineH}:${deadlineM}</b>.</p>
-                            ${partialNote}
-                        </div>
+                        
                     `;
                     document.getElementById('clock-in-btn').disabled = false;
                     document.getElementById('clock-out-btn').disabled = true;
