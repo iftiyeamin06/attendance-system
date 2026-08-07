@@ -1,0 +1,157 @@
+<%- include('partials/layout-header') %>
+
+        <div class="max-w-4xl mx-auto space-y-6 mb-8">
+            <div class="flex items-center space-x-3 mb-2">
+                <div class="w-9 h-9 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-bold">
+                    <i class="fa-solid fa-sliders text-sm"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-extrabold text-slate-900">Office & System Configuration</h2>
+                    <p class="text-xs text-slate-500 font-medium">Configure network restrictions, shift timings, and grace periods</p>
+                </div>
+            </div>
+
+            <form id="settings-form" class="space-y-6">
+                <!-- IP Network Card -->
+                <div class="surface-card p-6">
+                    <div class="flex items-center space-x-3 mb-4 pb-3 border-b border-slate-100">
+                        <i class="fa-solid fa-network-wired text-indigo-500 text-sm"></i>
+                        <h3 class="text-sm font-extrabold text-slate-900 uppercase tracking-wider">Network Restriction (Office Public IP)</h3>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                        <div>
+                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Office Public IP Address</label>
+                            <div class="relative">
+                                <i class="fa-solid fa-globe absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                <input type="text" id="office-ip-input"
+                                    class="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+                                    placeholder="e.g. 192.168.1.100">
+                            </div>
+                            <p class="text-xs text-slate-400 mt-2 font-medium flex items-center space-x-1">
+                                <span>Active IP Binding:</span>
+                                <span id="current-ip" class="font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md"></span>
+                            </p>
+                        </div>
+
+                        <div class="bg-slate-50 border border-slate-200/80 p-4 rounded-xl text-xs text-slate-500 space-y-1 font-medium">
+                            <p class="font-bold text-slate-800 flex items-center space-x-1">
+                                <i class="fa-solid fa-shield-halved text-indigo-500 mr-1"></i>
+                                <span>IP Verification Protocol</span>
+                            </p>
+                            <p>Clock ins outside this public IP will be flagged as remote/unauthorized unless IP bypass is configured.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Shift Hours & Grace Period Card -->
+                <div class="surface-card p-6">
+                    <div class="flex items-center space-x-3 mb-4 pb-3 border-b border-slate-100">
+                        <i class="fa-solid fa-clock text-indigo-500 text-sm"></i>
+                        <h3 class="text-sm font-extrabold text-slate-900 uppercase tracking-wider">Shift Schedule & Late Grace Period</h3>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Shift Start Time</label>
+                            <input type="time" id="office-start-time"
+                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                        </div>
+
+                        <div>
+                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Shift End Time</label>
+                            <input type="time" id="office-end-time"
+                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                        </div>
+
+                        <div>
+                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Grace Period (Minutes)</label>
+                            <input type="number" id="grace-period" min="0" max="60"
+                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                        </div>
+                    </div>
+
+                    <div class="mt-6 p-4 bg-amber-50/70 border border-amber-200/60 rounded-xl flex items-center space-x-3">
+                        <div class="w-8 h-8 bg-amber-100 text-amber-700 rounded-lg flex items-center justify-center font-bold">
+                            <i class="fa-solid fa-triangle-exclamation text-xs"></i>
+                        </div>
+                        <div class="text-xs text-amber-800 font-semibold">
+                            <span>Employees arriving after <span id="late-after" class="font-bold underline text-amber-900">--:--</span> will be automatically marked LATE by the system.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="flex justify-end">
+                    <button type="submit"
+                        class="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-8 py-3 rounded-xl text-sm transition shadow-sm flex items-center space-x-2">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        <span>Save Configuration Settings</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+<%- include('partials/layout-footer') %>
+
+    <script>
+        async function loadSettings() {
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/settings/office-time`);
+                const data = await response.json();
+
+                document.getElementById('office-start-time').value = data.data.office_start_time || '09:00';
+                document.getElementById('office-end-time').value = data.data.office_end_time || '17:00';
+                document.getElementById('grace-period').value = data.data.grace_period_minutes || 10;
+
+                const dashResponse = await fetchWithAuth(`${API_BASE}/admin/dashboard`);
+                const dashData = await dashResponse.json();
+                document.getElementById('office-ip-input').value = dashData.data.office_ip;
+                document.getElementById('current-ip').textContent = dashData.data.office_ip;
+
+                updateLateAfterText();
+            } catch (err) { console.error(err); }
+        }
+
+        function updateLateAfterText() {
+            const startTime = document.getElementById('office-start-time').value || '09:00';
+            const grace = parseInt(document.getElementById('grace-period').value) || 0;
+            const [h, m] = startTime.split(':').map(Number);
+            const lateMinutes = h * 60 + m + grace;
+            const lateH = Math.floor(lateMinutes / 60).toString().padStart(2, '0');
+            const lateM = (lateMinutes % 60).toString().padStart(2, '0');
+            document.getElementById('late-after').textContent = `${lateH}:${lateM}`;
+        }
+
+        document.getElementById('office-start-time').addEventListener('change', updateLateAfterText);
+        document.getElementById('grace-period').addEventListener('input', updateLateAfterText);
+
+        document.getElementById('settings-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const ip = document.getElementById('office-ip-input').value.trim();
+            const startTime = document.getElementById('office-start-time').value;
+            const endTime = document.getElementById('office-end-time').value;
+            const gracePeriod = document.getElementById('grace-period').value;
+
+            if (!ip) { alert('Please enter a valid IP address'); return; }
+
+            try {
+                await fetchWithAuth(`${API_BASE}/admin/settings/ip`, {
+                    method: 'POST',
+                    body: JSON.stringify({ office_public_ip: ip }),
+                });
+                await fetchWithAuth(`${API_BASE}/admin/settings/office-time`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        office_start_time: startTime,
+                        office_end_time: endTime,
+                        grace_period_minutes: parseInt(gracePeriod),
+                    }),
+                });
+                showMessage('Settings saved successfully', 'success');
+                loadSettings();
+            } catch (err) { console.error(err); }
+        });
+
+        loadSettings();
+    </script>

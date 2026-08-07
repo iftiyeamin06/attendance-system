@@ -1,0 +1,544 @@
+<%- include('partials/layout-header') %>
+
+        <!-- Hero Header -->
+        <div class="surface-card p-6 sm:p-8 relative overflow-hidden mb-6">
+            <div class="absolute -top-20 -right-20 w-64 h-64 bg-slate-100 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="relative z-10 flex flex-col md:flex-row justify-between md:items-center gap-4">
+                <div>
+                    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Overview</p>
+                    <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mb-1">
+                        Good day, <%= (user && user.name) ? user.name.split(' ')[0] : 'Admin' %>.
+                    </h1>
+                    <p class="text-sm text-slate-500">Here's the workforce attendance overview for today.</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span id="today-date" class="text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-full shadow-sm"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attendance Summary (KPI) -->
+        <div class="mb-6">
+            <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Attendance Summary</h2>
+
+            <div id="summary-cards" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <!-- Present Card -->
+                <div class="card-kpi card-kpi-emerald p-5 flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-emerald-700 uppercase tracking-wider">Present</span>
+                        <div class="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600">
+                            <i class="fa-solid fa-user-check text-sm"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex items-baseline justify-between">
+                        <p id="count-present" class="text-3xl font-extrabold text-slate-900">0</p>
+                        <span class="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/50">On Time</span>
+                    </div>
+                </div>
+
+                <!-- Late Card -->
+                <div class="card-kpi card-kpi-amber p-5 flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-amber-700 uppercase tracking-wider">Late</span>
+                        <div class="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center text-amber-600">
+                            <i class="fa-solid fa-user-clock text-sm"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex items-baseline justify-between">
+                        <p id="count-late" class="text-3xl font-extrabold text-slate-900">0</p>
+                        <span class="text-[11px] font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/50">Grace Exceeded</span>
+                    </div>
+                </div>
+
+                <!-- On Leave Card -->
+                <div class="card-kpi card-kpi-blue p-5 flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-blue-700 uppercase tracking-wider">On Leave</span>
+                        <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">
+                            <i class="fa-solid fa-plane-departure text-sm"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex items-baseline justify-between">
+                        <p id="count-leave" class="text-3xl font-extrabold text-slate-900">0</p>
+                        <span class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/50">Approved</span>
+                    </div>
+                </div>
+
+                <!-- Absent Card -->
+                <div class="card-kpi card-kpi-gray p-5 flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Absent</span>
+                        <div class="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-600">
+                            <i class="fa-solid fa-user-xmark text-sm"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex items-baseline justify-between">
+                        <p id="count-absent" class="text-3xl font-extrabold text-slate-900">0</p>
+                        <span class="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">Unaccounted</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attendance Logs Table Container -->
+        <div class="surface-card overflow-hidden mb-8">
+            <div class="px-6 py-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-9 h-9 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-center text-indigo-600">
+                        <i class="fa-solid fa-list-check text-sm"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-900 tracking-tight">Today's Attendance Logs</h2>
+                        <p class="text-xs text-slate-400 mt-0.5">Click employee row to view full monthly attendance summary</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-3 w-full sm:w-auto">
+                    <!-- Quick Search Input -->
+                    <div class="relative w-full sm:w-48">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="search-input" onkeyup="filterTable()" placeholder="Search employee..."
+                            class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                    </div>
+
+                    <!-- Date Input -->
+                    <div class="relative">
+                        <input type="date" id="attendance-date"
+                            class="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                    </div>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-slate-50/60 border-b border-slate-100 text-[11px] uppercase tracking-wider font-semibold text-slate-400">
+                        <tr>
+                            <th class="py-3 px-6">Employee</th>
+                            <th class="py-3 px-4">Clock In</th>
+                            <th class="py-3 px-4">Clock Out</th>
+                            <th class="py-3 px-4">IP Address</th>
+                            <th class="py-3 px-4">Device ID</th>
+                            <th class="py-3 px-6">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="attendance-table" class="divide-y divide-slate-100">
+                        <tr>
+                            <td colspan="6" class="py-12 text-center text-slate-400 text-sm">
+                                <div class="inline-flex items-center space-x-2">
+                                    <i class="fa-solid fa-circle-notch fa-spin text-indigo-500 text-base"></i>
+                                    <span>Loading attendance logs...</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Employee Monthly Summary Modal -->
+        <div id="employee-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-md transition-opacity" onclick="closeModal()"></div>
+            <div class="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 max-h-full">
+                <!-- Modal Header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
+                    <div class="flex items-center space-x-3">
+                        <div id="modal-avatar" class="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center font-bold text-base shadow-sm">
+                            E
+                        </div>
+                        <div>
+                            <h2 id="modal-employee-name" class="text-sm font-extrabold text-slate-900"></h2>
+                            <p id="modal-employee-email" class="text-xs text-slate-400 font-medium"></p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <select id="modal-month" class="px-3.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"></select>
+                        <button onclick="closeModal()" class="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-lg flex items-center justify-center transition">
+                            <i class="fa-solid fa-xmark text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="flex-1 overflow-y-auto p-6 space-y-6">
+                    <div id="modal-loading" class="text-center py-16 text-slate-400">
+                        <i class="fa-solid fa-circle-notch fa-spin text-indigo-500 text-2xl mb-2"></i>
+                        <p class="text-xs font-semibold">Loading employee report...</p>
+                    </div>
+
+                    <div id="modal-content" class="hidden space-y-6">
+                        <!-- Key Stats Grid -->
+                        <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                            <div class="bg-emerald-50/80 border border-emerald-200/60 rounded-2xl p-3.5 text-center">
+                                <p class="text-2xl font-extrabold text-emerald-700" id="m-present">0</p>
+                                <p class="text-xs font-bold text-emerald-600 uppercase tracking-wider mt-0.5">Present</p>
+                            </div>
+                            <div class="bg-amber-50/80 border border-amber-200/60 rounded-2xl p-3.5 text-center">
+                                <p class="text-2xl font-extrabold text-amber-700" id="m-late">0</p>
+                                <p class="text-xs font-bold text-amber-600 uppercase tracking-wider mt-0.5">Late</p>
+                            </div>
+                            <div class="bg-blue-50/80 border border-blue-200/60 rounded-2xl p-3.5 text-center">
+                                <p class="text-2xl font-extrabold text-blue-700" id="m-leave">0</p>
+                                <p class="text-xs font-bold text-blue-600 uppercase tracking-wider mt-0.5">On Leave</p>
+                            </div>
+                            <div class="bg-slate-100 border border-slate-200 rounded-2xl p-3.5 text-center">
+                                <p class="text-2xl font-extrabold text-slate-700" id="m-absent">0</p>
+                                <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mt-0.5">Absent</p>
+                            </div>
+                            <div class="bg-indigo-50/80 border border-indigo-200/60 rounded-2xl p-3.5 text-center col-span-2 md:col-span-1">
+                                <p class="text-2xl font-extrabold text-indigo-700" id="m-rate">0%</p>
+                                <p class="text-xs font-bold text-indigo-600 uppercase tracking-wider mt-0.5">Rate</p>
+                            </div>
+                        </div>
+
+                        <!-- Secondary Metrics -->
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div class="bg-white border border-slate-200/80 rounded-2xl p-3.5 text-center shadow-2xs">
+                                <p class="text-base font-extrabold text-slate-900" id="m-hours">0h 0m</p>
+                                <p class="text-[11px] font-medium text-slate-400">Hours Worked</p>
+                            </div>
+                            <div class="bg-white border border-slate-200/80 rounded-2xl p-3.5 text-center shadow-2xs">
+                                <p class="text-base font-extrabold text-amber-600" id="m-late-min">0 min</p>
+                                <p class="text-[11px] font-medium text-slate-400">Total Late Time</p>
+                            </div>
+                            <div class="bg-white border border-slate-200/80 rounded-2xl p-3.5 text-center shadow-2xs">
+                                <p class="text-base font-extrabold text-indigo-600" id="m-partial">0</p>
+                                <p class="text-[11px] font-medium text-slate-400">Partial Days</p>
+                            </div>
+                        </div>
+
+                        <!-- Attendance Chart Container -->
+                        <div class="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-4">
+                            <div class="flex justify-between items-center mb-3">
+                                <p class="text-xs font-bold text-slate-600 uppercase tracking-wider">Attendance Distribution</p>
+                                <div class="flex items-center space-x-3 text-[10px] font-bold">
+                                    <span class="flex items-center space-x-1 text-emerald-600"><span class="w-2 h-2 bg-emerald-400 rounded-full"></span><span>Verified</span></span>
+                                    <span class="flex items-center space-x-1 text-amber-600"><span class="w-2 h-2 bg-amber-400 rounded-full"></span><span>Late</span></span>
+                                    <span class="flex items-center space-x-1 text-blue-600"><span class="w-2 h-2 bg-blue-400 rounded-full"></span><span>Leave</span></span>
+                                </div>
+                            </div>
+                            <div id="m-chart" class="flex items-end space-x-1 h-16 pt-2"></div>
+                            <div class="flex items-center justify-between mt-2 text-[11px] font-medium text-slate-400">
+                                <span id="m-chart-start"></span>
+                                <span id="m-chart-end"></span>
+                            </div>
+                        </div>
+
+                        <!-- Daily Breakdown Table -->
+                        <div class="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-2xs">
+                            <div class="px-4 py-3 bg-slate-50/80 border-b border-slate-100">
+                                <p class="text-xs font-bold text-slate-600 uppercase tracking-wider">Daily Log Breakdown</p>
+                            </div>
+                            <div id="m-daily" class="divide-y divide-slate-100 max-h-72 overflow-y-auto"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+<%- include('partials/layout-footer') %>
+
+    <script>
+        let currentEmployeeId = null;
+        let allEmployeeIds = {};
+        const DAKHA_TIME_ZONE = 'Asia/Dhaka';
+
+        function dhakaDateParts(date = new Date()) {
+            const parts = new Intl.DateTimeFormat('en-US', {
+                timeZone: DAKHA_TIME_ZONE,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hourCycle: 'h23',
+            }).formatToParts(new Date(date));
+
+            const mapped = {};
+            for (const part of parts) {
+                if (part.type !== 'literal') mapped[part.type] = part.value;
+            }
+            return mapped;
+        }
+
+        function formatDhakaTime(date) {
+            return new Intl.DateTimeFormat('en-US', {
+                timeZone: DAKHA_TIME_ZONE,
+                hour: '2-digit',
+                minute: '2-digit',
+            }).format(new Date(date));
+        }
+
+        function formatDhakaMonthLabel(date) {
+            return new Intl.DateTimeFormat('en-US', {
+                timeZone: DAKHA_TIME_ZONE,
+                month: 'long',
+                year: 'numeric',
+            }).format(new Date(date));
+        }
+
+        function dhakaDateInputValue() {
+            const parts = dhakaDateParts(new Date());
+            return `${parts.year}-${parts.month}-${parts.day}`;
+        }
+
+        function dhakaMonthYearDate() {
+            const parts = dhakaDateParts(new Date());
+            return new Date(Number(parts.year), Number(parts.month) - 1, 1);
+        }
+
+        async function loadDashboard() {
+            try {
+                const dateInput = document.getElementById('attendance-date');
+                const selectedDate = dateInput.value;
+                const url = selectedDate
+                    ? `${API_BASE}/admin/dashboard?date=${selectedDate}`
+                    : `${API_BASE}/admin/dashboard`;
+
+                const response = await fetchWithAuth(url);
+                const data = await response.json();
+
+                document.getElementById('today-date').textContent = data.data.today;
+
+                const logs = data.data.attendance_today;
+                const attendanceTable = document.getElementById('attendance-table');
+
+                if (data.data.employees) {
+                    data.data.employees.forEach(e => { allEmployeeIds[e.name] = e.id; });
+                }
+
+                if (logs.length === 0) {
+                    attendanceTable.innerHTML = `
+                        <tr>
+                            <td colspan="6" class="py-12 text-center text-slate-400">
+                                <i class="fa-regular fa-folder-open text-2xl text-slate-300 mb-2 block"></i>
+                                <span>No attendance logs recorded for this date.</span>
+                            </td>
+                        </tr>
+                    `;
+                } else {
+                    attendanceTable.innerHTML = logs.map(log => {
+                        const isOnLeave = log.status === 'ON_LEAVE';
+                        const empId = log.user?.id || allEmployeeIds[log.user?.name];
+                        const nameClick = empId ? `onclick="openModal('${empId}')"` : '';
+                        const initial = (log.user?.name || 'E').charAt(0).toUpperCase();
+
+                        let badgeHtml = '';
+                        if (isOnLeave) {
+                            badgeHtml = `<span class="badge-pill badge-leave"><span class="badge-dot"></span>ON LEAVE</span>`;
+                        } else if (log.is_late) {
+                            badgeHtml = `<span class="badge-pill badge-late"><span class="badge-dot"></span>LATE</span>`;
+                        } else if (log.status === 'VERIFIED') {
+                            badgeHtml = `<span class="badge-pill badge-present"><span class="badge-dot"></span>VERIFIED</span>`;
+                        } else {
+                            badgeHtml = `<span class="badge-pill badge-absent"><span class="badge-dot"></span>${log.status}</span>`;
+                        }
+                        const partialBadge = log.partial_leave
+                            ? `<span class="badge-pill badge-neutral"><span class="badge-dot"></span>PARTIAL</span>`
+                            : '';
+
+                        return `
+                        <tr class="hover:bg-slate-50/80 transition-colors cursor-pointer group" ${nameClick}>
+                            <td class="py-3.5 px-6">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-8 h-8 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-bold text-xs shadow-2xs">
+                                        ${initial}
+                                    </div>
+                                    <div>
+                                        <div class="font-bold text-slate-900 text-sm group-hover:text-indigo-600 transition">${log.user?.name || 'Unknown'}</div>
+                                        ${log.is_late ? `<div class="text-[11px] text-amber-600 font-semibold"><i class="fa-regular fa-clock mr-1"></i>Late by ${log.late_minutes}m</div>` : ''}
+                                        ${log.partial_leave ? `<div class="text-[11px] text-indigo-600 font-semibold mt-0.5"><i class="fa-regular fa-hourglass-half mr-1"></i>Partial leave ${log.partial_leave.from} - ${log.partial_leave.to}</div>` : ''}
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="py-3.5 px-4 font-semibold ${log.is_late ? 'text-amber-600' : 'text-slate-700'}">${log.clock_in_time ? formatDhakaTime(log.clock_in_time) : '—'}</td>
+                            <td class="py-3.5 px-4 font-semibold text-slate-700">${log.clock_out_time ? formatDhakaTime(log.clock_out_time) : '—'}</td>
+                            <td class="py-3.5 px-4 font-mono text-xs text-slate-500">${isOnLeave ? '—' : log.ip_address}</td>
+                            <td class="py-3.5 px-4 font-mono text-xs text-slate-500">${isOnLeave ? '—' : (log.device_id ? log.device_id.substring(0,12) + '...' : '—')}</td>
+                            <td class="py-3.5 px-6">
+                                <div class="flex items-center gap-1.5">${badgeHtml}${partialBadge}</div>
+                            </td>
+                        </tr>
+                    `}).join('');
+                }
+
+                const present = logs.filter(l => l.status === 'VERIFIED' && !l.is_late).length;
+                const late = logs.filter(l => l.is_late).length;
+                const onLeave = logs.filter(l => l.status === 'ON_LEAVE').length;
+                const totalEmployees = data.data.employees?.length || 0;
+                const absent = totalEmployees - present - late - onLeave;
+
+                document.getElementById('count-present').textContent = present;
+                document.getElementById('count-late').textContent = late;
+                document.getElementById('count-leave').textContent = onLeave;
+                document.getElementById('count-absent').textContent = Math.max(0, absent);
+
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function filterTable() {
+            const input = document.getElementById('search-input').value.toLowerCase();
+            const rows = document.querySelectorAll('#attendance-table tr');
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(input) ? '' : 'none';
+            });
+        }
+
+        async function openModal(employeeId) {
+            currentEmployeeId = employeeId;
+            const modal = document.getElementById('employee-modal');
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+
+            populateMonthSelector();
+            await loadEmployeeSummary(employeeId);
+        }
+
+        function closeModal() {
+            document.getElementById('employee-modal').classList.add('hidden');
+            document.body.style.overflow = '';
+            currentEmployeeId = null;
+        }
+
+        function populateMonthSelector() {
+            const select = document.getElementById('modal-month');
+            select.innerHTML = '';
+                const now = dhakaMonthYearDate();
+                for (let i = 0; i < 12; i++) {
+                    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                    const val = `${d.getMonth() + 1}:${d.getFullYear()}`;
+                    const label = formatDhakaMonthLabel(d);
+                    const opt = document.createElement('option');
+                    opt.value = val;
+                    opt.textContent = label;
+                if (i === 0) opt.selected = true;
+                select.appendChild(opt);
+            }
+        }
+
+        async function loadEmployeeSummary(employeeId) {
+            const loading = document.getElementById('modal-loading');
+            const content = document.getElementById('modal-content');
+            loading.classList.remove('hidden');
+            content.classList.add('hidden');
+
+            const [month, year] = document.getElementById('modal-month').value.split(':');
+
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/employee/${employeeId}/summary?month=${month}&year=${year}`);
+                const data = await response.json();
+                if (!data.success) throw new Error(data.message);
+
+                const emp = data.data.employee;
+                const s = data.data.summary;
+
+                document.getElementById('modal-employee-name').textContent = emp.name;
+                document.getElementById('modal-employee-email').textContent = emp.email;
+                document.getElementById('modal-avatar').textContent = (emp.name || 'E').charAt(0).toUpperCase();
+
+                document.getElementById('m-present').textContent = s.present;
+                document.getElementById('m-late').textContent = s.late;
+                document.getElementById('m-leave').textContent = s.on_leave;
+                document.getElementById('m-absent').textContent = s.absent;
+                document.getElementById('m-rate').textContent = s.attendance_rate + '%';
+                document.getElementById('m-hours').textContent = s.total_hours_worked;
+                document.getElementById('m-late-min').textContent = s.total_late_minutes + ' min';
+                document.getElementById('m-partial').textContent = s.partial_leave_days;
+
+                renderChart(data.data.daily_breakdown);
+                renderDailyBreakdown(data.data.daily_breakdown);
+
+                loading.classList.add('hidden');
+                content.classList.remove('hidden');
+            } catch (err) {
+                loading.innerHTML = '<p class="text-rose-500 font-semibold">Failed to load employee summary.</p>';
+                console.error(err);
+            }
+        }
+
+        function renderChart(days) {
+            const chart = document.getElementById('m-chart');
+            chart.innerHTML = '';
+            if (days.length === 0) return;
+
+            days.forEach(day => {
+                const bar = document.createElement('div');
+                let color = 'bg-slate-200';
+                if (day.status === 'VERIFIED') color = 'bg-emerald-400';
+                else if (day.status === 'LATE') color = 'bg-amber-400';
+                else if (day.status === 'ON_LEAVE') color = 'bg-blue-400';
+                else if (day.status === 'ABSENT') color = 'bg-rose-200';
+
+                bar.className = `flex-1 ${color} rounded-sm min-w-[4px] transition-all hover:opacity-80`;
+                bar.title = `${day.date} (${day.day}): ${day.status}`;
+                bar.style.height = day.status === 'ABSENT' ? '20%' : '100%';
+                chart.appendChild(bar);
+            });
+
+            if (days.length > 0) {
+                document.getElementById('m-chart-start').textContent = days[0].date;
+                document.getElementById('m-chart-end').textContent = days[days.length - 1].date;
+            }
+        }
+
+        function renderDailyBreakdown(days) {
+            const container = document.getElementById('m-daily');
+            if (days.length === 0) {
+                container.innerHTML = '<p class="py-6 text-center text-slate-400 text-xs">No daily record found for this month.</p>';
+                return;
+            }
+
+            container.innerHTML = days.map(day => {
+                let badgeClass = 'badge-pill badge-neutral';
+                if (day.status === 'VERIFIED') badgeClass = 'badge-pill badge-present';
+                else if (day.status === 'LATE') badgeClass = 'badge-pill badge-late';
+                else if (day.status === 'ON_LEAVE') badgeClass = 'badge-pill badge-leave';
+                else if (day.status === 'ABSENT') badgeClass = 'badge-pill badge-absent';
+
+                let detail = '';
+                if (day.clock_in) {
+                    detail = `<span class="font-semibold text-slate-700">${day.clock_in}</span>`;
+                    if (day.clock_out) detail += ` <span class="text-slate-300">-</span> <span class="font-semibold text-slate-700">${day.clock_out}</span>`;
+                    if (day.duration) detail += ` <span class="text-slate-400 ml-1">(${day.duration})</span>`;
+                } else if (day.leave_type) {
+                    detail = `<span class="text-blue-600 font-semibold capitalize">${day.leave_type} Leave</span>`;
+                } else if (day.status === 'ABSENT') {
+                    detail = '<span class="text-rose-400 italic">No Clock In</span>';
+                }
+
+                let lateTag = '';
+                if (day.is_late) {
+                    lateTag = `<span class="px-2 py-0.5 text-[10px] font-bold rounded-md bg-amber-100 text-amber-700 ml-1">Late ${day.late_minutes}m</span>`;
+                }
+
+                return `
+                    <div class="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition">
+                        <div class="flex items-center space-x-3 min-w-0">
+                            <div class="w-14 text-xs font-bold text-slate-400">${day.day}</div>
+                            <div class="text-xs font-bold text-slate-800">${day.date.split('-').slice(1).join('/')}</div>
+                            ${lateTag}
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <div class="text-xs text-right">${detail}</div>
+                            <span class="${badgeClass}">${day.status}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        document.getElementById('modal-month').addEventListener('change', () => {
+            if (currentEmployeeId) loadEmployeeSummary(currentEmployeeId);
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        document.getElementById('attendance-date').addEventListener('change', loadDashboard);
+        document.getElementById('attendance-date').value = dhakaDateInputValue();
+        loadDashboard();
+    </script>

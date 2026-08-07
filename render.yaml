@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: attendance-system
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm run start:render
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ATTENDANCE_TIME_ZONE
+        value: Asia/Dhaka
+      - key: TZ
+        value: Asia/Dhaka
+      - key: TRUST_PROXY
+        value: "true"

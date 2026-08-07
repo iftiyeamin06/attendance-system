@@ -1,0 +1,692 @@
+<%- include('partials/layout-header') %>
+
+        <!-- Quick Actions -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            <button onclick="openAddEmployeeModal()"
+                class="surface-card p-6 flex items-center space-x-4 text-left hover:border-indigo-300 hover:shadow-md transition group">
+                <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center font-bold group-hover:bg-blue-600 group-hover:text-white transition">
+                    <i class="fa-solid fa-user-plus text-lg"></i>
+                </div>
+                <div>
+                    <h2 class="text-base font-extrabold text-slate-900">Add New Employee</h2>
+                    <p class="text-xs text-slate-400 font-medium">Create employee account with optional device binding</p>
+                </div>
+                <i class="fa-solid fa-chevron-right ml-auto text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition"></i>
+            </button>
+
+            <button onclick="openAddAdminModal()"
+                class="surface-card p-6 flex items-center space-x-4 text-left hover:border-slate-400 hover:shadow-md transition group">
+                <div class="w-12 h-12 bg-slate-100 text-slate-900 rounded-2xl flex items-center justify-center font-bold group-hover:bg-slate-900 group-hover:text-white transition">
+                    <i class="fa-solid fa-shield-halved text-lg"></i>
+                </div>
+                <div>
+                    <h2 class="text-base font-extrabold text-slate-900">Add New Admin</h2>
+                    <p class="text-xs text-slate-400 font-medium">Full system permissions</p>
+                </div>
+                <i class="fa-solid fa-chevron-right ml-auto text-slate-300 group-hover:text-slate-500 group-hover:translate-x-1 transition"></i>
+            </button>
+        </div>
+
+        <!-- Add Employee Modal -->
+        <div id="add-employee-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-md transition-opacity" onclick="closeAddEmployeeModal()"></div>
+            <div class="relative w-full max-w-md bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 max-h-full">
+                <!-- Modal Header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center font-bold shadow-xs">
+                            <i class="fa-solid fa-user-plus text-base"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-base font-extrabold text-slate-900">Add New Employee</h2>
+                            <p class="text-xs text-slate-400 font-medium">Create employee account with optional device binding</p>
+                        </div>
+                    </div>
+                    <button onclick="closeAddEmployeeModal()" class="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl flex items-center justify-center transition">
+                        <i class="fa-solid fa-xmark text-sm"></i>
+                    </button>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="flex-1 overflow-y-auto p-6">
+                    <form id="add-employee-form" class="grid grid-cols-1 gap-4">
+                        <div>
+                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Full Name</label>
+                            <div class="relative">
+                                <i class="fa-regular fa-user absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                <input type="text" id="emp-name" required
+                                    class="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+                                    placeholder="John Doe">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Email Address</label>
+                            <div class="relative">
+                                <i class="fa-regular fa-envelope absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                <input type="email" id="emp-email" required
+                                    class="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+                                    placeholder="john@company.com">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Temporary Password</label>
+                            <div class="relative">
+                                <i class="fa-solid fa-key absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                <input type="text" id="emp-password" required
+                                    class="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+                                    placeholder="Pass123!">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Device ID (Optional)</label>
+                            <div class="relative">
+                                <i class="fa-solid fa-mobile-screen absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                <input type="text" id="emp-device"
+                                    class="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+                                    placeholder="Auto-binds on 1st login">
+                            </div>
+                        </div>
+
+                        <div class="pt-2 grid grid-cols-2 gap-3">
+                            <button type="button" onclick="closeAddEmployeeModal()"
+                                class="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition">
+                                Cancel
+                            </button>
+                            <button type="submit"
+                                class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition shadow-sm flex items-center justify-center space-x-2">
+                                <i class="fa-solid fa-plus"></i>
+                                <span>Create Account</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Admin Modal -->
+        <div id="add-admin-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-md transition-opacity" onclick="closeAddAdminModal()"></div>
+            <div class="relative w-full max-w-md bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 max-h-full">
+                <!-- Modal Header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-slate-100 text-slate-900 rounded-2xl flex items-center justify-center font-bold shadow-xs">
+                            <i class="fa-solid fa-shield-halved text-base"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-base font-extrabold text-slate-900">Add New Admin</h2>
+                            <p class="text-xs text-slate-400 font-medium">Full system permissions</p>
+                        </div>
+                    </div>
+                    <button onclick="closeAddAdminModal()" class="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl flex items-center justify-center transition">
+                        <i class="fa-solid fa-xmark text-sm"></i>
+                    </button>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="flex-1 overflow-y-auto p-6">
+                    <form id="add-admin-form" class="space-y-4">
+                        <div>
+                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-1.5">Name</label>
+                            <input type="text" id="admin-name" required
+                                class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+                                placeholder="Admin Name">
+                        </div>
+                        <div>
+                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-1.5">Email</label>
+                            <input type="email" id="admin-email" required
+                                class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+                                placeholder="admin@company.com">
+                        </div>
+                        <div>
+                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-1.5">Password</label>
+                            <input type="text" id="admin-password" required
+                                class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+                                placeholder="AdminPass123">
+                        </div>
+                        <div class="pt-2 grid grid-cols-2 gap-3">
+                            <button type="button" onclick="closeAddAdminModal()"
+                                class="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition">
+                                Cancel
+                            </button>
+                            <button type="submit"
+                                class="bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl text-xs uppercase tracking-wider transition shadow-sm flex items-center justify-center space-x-2">
+                                <i class="fa-solid fa-user-shield"></i>
+                                <span>Create Administrator</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Users Management Table -->
+        <div class="surface-card overflow-hidden mb-8">
+            <div class="p-5 border-b border-slate-100 flex items-center justify-between flex-wrap gap-4 bg-slate-50/50">
+                <div class="flex items-center space-x-3">
+                    <div class="w-9 h-9 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-bold">
+                        <i class="fa-solid fa-users-gear text-sm"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-base font-extrabold text-slate-900">User Directory</h2>
+                        <p class="text-xs text-slate-500 font-medium">Manage accounts and device bindings</p>
+                    </div>
+                </div>
+                <button onclick="exportCsv()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-xs transition shadow-sm flex items-center space-x-2">
+                    <i class="fa-solid fa-file-csv text-sm"></i>
+                    <span>Export Attendance CSV</span>
+                </button>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-slate-50/80 border-b border-slate-100 text-[11px] uppercase tracking-wider font-extrabold text-slate-400">
+                        <tr>
+                            <th class="py-3.5 px-6">User</th>
+                            <th class="py-3.5 px-4">Email</th>
+                            <th class="py-3.5 px-4">Role</th>
+                            <th class="py-3.5 px-4">Device Bound</th>
+                            <th class="py-3.5 px-6 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="employees-table" class="divide-y divide-slate-100">
+                        <tr>
+                            <td colspan="5" class="py-12 text-center text-slate-400">
+                                <i class="fa-solid fa-circle-notch fa-spin text-indigo-500 text-base mr-2"></i>
+                                <span>Loading users...</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Employee Monthly Summary Modal -->
+        <div id="employee-modal" class="fixed inset-0 z-50 hidden">
+            <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-md transition-opacity" onclick="closeModal()"></div>
+            <div class="absolute inset-4 md:inset-8 lg:inset-12 bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-slate-200">
+                <!-- Modal Header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
+                    <div class="flex items-center space-x-3">
+                        <div id="modal-avatar" class="w-10 h-10 bg-indigo-600 text-white rounded-2xl flex items-center justify-center font-bold text-base shadow-sm">
+                            E
+                        </div>
+                        <div>
+                            <h2 id="modal-employee-name" class="text-base font-extrabold text-slate-900"></h2>
+                            <p id="modal-employee-email" class="text-xs text-slate-400 font-medium"></p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <select id="modal-month" class="px-3.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs"></select>
+                        <button onclick="closeModal()" class="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl flex items-center justify-center transition">
+                            <i class="fa-solid fa-xmark text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="flex-1 overflow-y-auto p-6 space-y-6">
+                    <div id="modal-loading" class="text-center py-16 text-slate-400">
+                        <i class="fa-solid fa-circle-notch fa-spin text-indigo-500 text-2xl mb-2"></i>
+                        <p class="text-xs font-semibold">Loading employee report...</p>
+                    </div>
+
+                    <div id="modal-content" class="hidden space-y-6">
+                        <!-- Key Stats Grid -->
+                        <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                            <div class="bg-emerald-50/80 border border-emerald-200/60 rounded-2xl p-3.5 text-center">
+                                <p class="text-2xl font-extrabold text-emerald-700" id="m-present">0</p>
+                                <p class="text-xs font-bold text-emerald-600 uppercase tracking-wider mt-0.5">Present</p>
+                            </div>
+                            <div class="bg-amber-50/80 border border-amber-200/60 rounded-2xl p-3.5 text-center">
+                                <p class="text-2xl font-extrabold text-amber-700" id="m-late">0</p>
+                                <p class="text-xs font-bold text-amber-600 uppercase tracking-wider mt-0.5">Late</p>
+                            </div>
+                            <div class="bg-blue-50/80 border border-blue-200/60 rounded-2xl p-3.5 text-center">
+                                <p class="text-2xl font-extrabold text-blue-700" id="m-leave">0</p>
+                                <p class="text-xs font-bold text-blue-600 uppercase tracking-wider mt-0.5">On Leave</p>
+                            </div>
+                            <div class="bg-slate-100 border border-slate-200 rounded-2xl p-3.5 text-center">
+                                <p class="text-2xl font-extrabold text-slate-700" id="m-absent">0</p>
+                                <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mt-0.5">Absent</p>
+                            </div>
+                            <div class="bg-indigo-50/80 border border-indigo-200/60 rounded-2xl p-3.5 text-center col-span-2 md:col-span-1">
+                                <p class="text-2xl font-extrabold text-indigo-700" id="m-rate">0%</p>
+                                <p class="text-xs font-bold text-indigo-600 uppercase tracking-wider mt-0.5">Rate</p>
+                            </div>
+                        </div>
+
+                        <!-- Secondary Metrics -->
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div class="bg-white border border-slate-200/80 rounded-2xl p-3.5 text-center shadow-2xs">
+                                <p class="text-base font-extrabold text-slate-900" id="m-hours">0h 0m</p>
+                                <p class="text-[11px] font-medium text-slate-400">Hours Worked</p>
+                            </div>
+                            <div class="bg-white border border-slate-200/80 rounded-2xl p-3.5 text-center shadow-2xs">
+                                <p class="text-base font-extrabold text-amber-600" id="m-late-min">0 min</p>
+                                <p class="text-[11px] font-medium text-slate-400">Total Late Time</p>
+                            </div>
+                            <div class="bg-white border border-slate-200/80 rounded-2xl p-3.5 text-center shadow-2xs">
+                                <p class="text-base font-extrabold text-indigo-600" id="m-partial">0</p>
+                                <p class="text-[11px] font-medium text-slate-400">Partial Days</p>
+                            </div>
+                        </div>
+
+                        <!-- Attendance Chart Container -->
+                        <div class="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-4">
+                            <div class="flex justify-between items-center mb-3">
+                                <p class="text-xs font-bold text-slate-600 uppercase tracking-wider">Attendance Distribution</p>
+                                <div class="flex items-center space-x-3 text-[10px] font-bold">
+                                    <span class="flex items-center space-x-1 text-emerald-600"><span class="w-2 h-2 bg-emerald-400 rounded-full"></span><span>Verified</span></span>
+                                    <span class="flex items-center space-x-1 text-amber-600"><span class="w-2 h-2 bg-amber-400 rounded-full"></span><span>Late</span></span>
+                                    <span class="flex items-center space-x-1 text-blue-600"><span class="w-2 h-2 bg-blue-400 rounded-full"></span><span>Leave</span></span>
+                                </div>
+                            </div>
+                            <div id="m-chart" class="flex items-end space-x-1 h-16 pt-2"></div>
+                            <div class="flex items-center justify-between mt-2 text-[11px] font-medium text-slate-400">
+                                <span id="m-chart-start"></span>
+                                <span id="m-chart-end"></span>
+                            </div>
+                        </div>
+
+                        <!-- Daily Breakdown Table -->
+                        <div class="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-2xs">
+                            <div class="px-4 py-3 bg-slate-50/80 border-b border-slate-100">
+                                <p class="text-xs font-bold text-slate-600 uppercase tracking-wider">Daily Log Breakdown</p>
+                            </div>
+                            <div id="m-daily" class="divide-y divide-slate-100 max-h-72 overflow-y-auto"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+<%- include('partials/layout-footer') %>
+
+    <script>
+        let currentEmployeeId = null;
+        const DAKHA_TIME_ZONE = 'Asia/Dhaka';
+
+        function dhakaDateParts(date = new Date()) {
+            const parts = new Intl.DateTimeFormat('en-US', {
+                timeZone: DAKHA_TIME_ZONE,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hourCycle: 'h23',
+            }).formatToParts(new Date(date));
+
+            const mapped = {};
+            for (const part of parts) {
+                if (part.type !== 'literal') mapped[part.type] = part.value;
+            }
+            return mapped;
+        }
+
+        function dhakaMonthYearDate() {
+            const parts = dhakaDateParts(new Date());
+            return new Date(Number(parts.year), Number(parts.month) - 1, 1);
+        }
+
+        function formatDhakaMonthLabel(date) {
+            return new Intl.DateTimeFormat('en-US', {
+                timeZone: DAKHA_TIME_ZONE,
+                month: 'long',
+                year: 'numeric',
+            }).format(new Date(date));
+        }
+
+        function dhakaDateInputValue() {
+            const parts = dhakaDateParts(new Date());
+            return `${parts.year}-${parts.month}-${parts.day}`;
+        }
+
+        async function loadEmployees() {
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/users`);
+                const data = await response.json();
+                const employeesTable = document.getElementById('employees-table');
+
+                employeesTable.innerHTML = data.data.map(emp => {
+                    const initial = (emp.name || 'U').charAt(0).toUpperCase();
+                    const isBound = !!emp.bound_device_id;
+                    const roleBadge = emp.role === 'admin'
+                        ? `<span class="px-2.5 py-1 text-xs font-bold rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200/60 inline-flex items-center space-x-1"><i class="fa-solid fa-shield-halved text-[10px]"></i><span>Admin</span></span>`
+                        : `<span class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 text-slate-600 border border-slate-200">Employee</span>`;
+
+                    const deviceBadge = isBound
+                        ? `<span class="font-mono text-xs bg-emerald-50 text-emerald-700 border border-emerald-200/60 px-2.5 py-1 rounded-lg inline-flex items-center space-x-1 font-semibold"><i class="fa-solid fa-mobile-screen-button text-xs"></i><span>${emp.bound_device_id.substring(0, 14)}...</span></span>`
+                        : `<span class="text-slate-400 text-xs italic font-medium"><i class="fa-regular fa-circle-xmark mr-1 text-slate-300"></i>Unbound</span>`;
+
+                    return `
+                    <tr class="hover:bg-slate-50/80 transition-colors">
+                        <td class="py-3.5 px-6">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-8 h-8 ${emp.role === 'admin' ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-700'} rounded-full flex items-center justify-center font-bold text-xs shadow-2xs">
+                                    ${initial}
+                                </div>
+                                <span class="font-bold text-slate-900 cursor-pointer hover:text-indigo-600 transition" onclick="openModal('${emp.id}')">${emp.name}</span>
+                            </div>
+                        </td>
+                        <td class="py-3.5 px-4 font-medium text-slate-600">${emp.email}</td>
+                        <td class="py-3.5 px-4">${roleBadge}</td>
+                        <td class="py-3.5 px-4">${deviceBadge}</td>
+                        <td class="py-3.5 px-6 text-right">
+                            <div class="flex items-center justify-end space-x-2">
+                                ${emp.role !== 'admin' ? `
+                                <button onclick="bindDevicePrompt('${emp.id}')" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/60 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1">
+                                    <i class="fa-solid fa-link text-[10px]"></i>
+                                    <span>Bind</span>
+                                </button>
+                                ${emp.has_bound_device
+                                    ? `<button onclick="resetDevice('${emp.id}')" class="bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-200 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1">
+                                        <i class="fa-solid fa-rotate-left text-[10px]"></i>
+                                        <span>Reset</span>
+                                       </button>`
+                                    : ''
+                                }
+                                ` : ''}
+                                <button onclick="deleteUser('${emp.id}', '${emp.name.replace(/'/g, "\\'")}', '${emp.role}')" class="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1" title="Delete ${emp.role}">
+                                    <i class="fa-regular fa-trash-can text-[10px]"></i>
+                                    <span>Delete</span>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `}).join('');
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function deleteUser(userId, userName, role) {
+            if (!confirm(`Are you sure you want to delete ${role} "${userName}"? This will permanently remove all associated records.`)) return;
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/users/${userId}`, { method: 'DELETE' });
+                const data = await response.json();
+                if (data.success) {
+                    showMessage(`${role === 'admin' ? 'Admin' : 'Employee'} deleted successfully`, 'success');
+                    loadEmployees();
+                } else {
+                    showMessage(data.message || 'Failed to delete user', 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                showMessage('Error deleting user', 'error');
+            }
+        }
+
+        async function resetDevice(userId) {
+            if (!confirm('Are you sure you want to reset the device binding for this user?')) return;
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/users/${userId}/reset-device`, { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('Device binding reset successfully', 'success');
+                    loadEmployees();
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        async function bindDevicePrompt(userId) {
+            const deviceId = prompt('Enter the device ID to bind:');
+            if (!deviceId) return;
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/users/${userId}/bind-device`, {
+                    method: 'POST',
+                    body: JSON.stringify({ device_id: deviceId }),
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('Device bound successfully', 'success');
+                    loadEmployees();
+                } else {
+                    alert(data.message || 'Failed to bind device');
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        document.getElementById('add-employee-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const body = {
+                name: document.getElementById('emp-name').value.trim(),
+                email: document.getElementById('emp-email').value.trim(),
+                password: document.getElementById('emp-password').value,
+                device_id: document.getElementById('emp-device').value.trim() || undefined,
+            };
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/users`, { method: 'POST', body: JSON.stringify(body) });
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('Employee created successfully', 'success');
+                    e.target.reset();
+                    closeAddEmployeeModal();
+                    loadEmployees();
+                } else {
+                    alert(data.message || 'Failed to create employee');
+                }
+            } catch (err) { console.error(err); }
+        });
+
+        document.getElementById('add-admin-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const body = {
+                name: document.getElementById('admin-name').value.trim(),
+                email: document.getElementById('admin-email').value.trim(),
+                password: document.getElementById('admin-password').value,
+            };
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/admins`, { method: 'POST', body: JSON.stringify(body) });
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('Admin created successfully', 'success');
+                    e.target.reset();
+                    closeAddAdminModal();
+                    loadEmployees();
+                } else {
+                    alert(data.message || 'Failed to create admin');
+                }
+            } catch (err) { console.error(err); }
+        });
+
+        async function exportCsv() {
+            try {
+                const token = await getStoredToken();
+                const response = await fetch(`${API_BASE}/admin/export`, { headers: { 'Authorization': `Bearer ${token}` } });
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `attendance_export_${dhakaDateInputValue()}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            } catch (err) { console.error('Export failed:', err); }
+        }
+
+        async function openModal(employeeId) {
+            currentEmployeeId = employeeId;
+            const modal = document.getElementById('employee-modal');
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+
+            populateMonthSelector();
+            await loadEmployeeSummary(employeeId);
+        }
+
+        function closeModal() {
+            document.getElementById('employee-modal').classList.add('hidden');
+            document.body.style.overflow = '';
+            currentEmployeeId = null;
+        }
+
+        function openAddEmployeeModal() {
+            document.getElementById('add-employee-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            document.getElementById('emp-name').focus();
+        }
+
+        function closeAddEmployeeModal() {
+            document.getElementById('add-employee-modal').classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+
+        function openAddAdminModal() {
+            document.getElementById('add-admin-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            document.getElementById('admin-name').focus();
+        }
+
+        function closeAddAdminModal() {
+            document.getElementById('add-admin-modal').classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+
+        function populateMonthSelector() {
+            const select = document.getElementById('modal-month');
+            select.innerHTML = '';
+            const now = dhakaMonthYearDate();
+            for (let i = 0; i < 12; i++) {
+                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                const val = `${d.getMonth() + 1}:${d.getFullYear()}`;
+                const label = formatDhakaMonthLabel(d);
+                const opt = document.createElement('option');
+                opt.value = val;
+                opt.textContent = label;
+                if (i === 0) opt.selected = true;
+                select.appendChild(opt);
+            }
+        }
+
+        async function loadEmployeeSummary(employeeId) {
+            const loading = document.getElementById('modal-loading');
+            const content = document.getElementById('modal-content');
+            loading.classList.remove('hidden');
+            content.classList.add('hidden');
+
+            const [month, year] = document.getElementById('modal-month').value.split(':');
+
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/employee/${employeeId}/summary?month=${month}&year=${year}`);
+                const data = await response.json();
+                if (!data.success) throw new Error(data.message);
+
+                const emp = data.data.employee;
+                const s = data.data.summary;
+
+                document.getElementById('modal-employee-name').textContent = emp.name;
+                document.getElementById('modal-employee-email').textContent = emp.email;
+                document.getElementById('modal-avatar').textContent = (emp.name || 'E').charAt(0).toUpperCase();
+
+                document.getElementById('m-present').textContent = s.present;
+                document.getElementById('m-late').textContent = s.late;
+                document.getElementById('m-leave').textContent = s.on_leave;
+                document.getElementById('m-absent').textContent = s.absent;
+                document.getElementById('m-rate').textContent = s.attendance_rate + '%';
+                document.getElementById('m-hours').textContent = s.total_hours_worked;
+                document.getElementById('m-late-min').textContent = s.total_late_minutes + ' min';
+                document.getElementById('m-partial').textContent = s.partial_leave_days;
+
+                renderChart(data.data.daily_breakdown);
+                renderDailyBreakdown(data.data.daily_breakdown);
+
+                loading.classList.add('hidden');
+                content.classList.remove('hidden');
+            } catch (err) {
+                loading.innerHTML = '<p class="text-rose-500 font-semibold">Failed to load employee summary.</p>';
+                console.error(err);
+            }
+        }
+
+        function renderChart(days) {
+            const chart = document.getElementById('m-chart');
+            chart.innerHTML = '';
+            if (days.length === 0) return;
+
+            days.forEach(day => {
+                const bar = document.createElement('div');
+                let color = 'bg-slate-200';
+                if (day.status === 'VERIFIED') color = 'bg-emerald-400';
+                else if (day.status === 'LATE') color = 'bg-amber-400';
+                else if (day.status === 'ON_LEAVE') color = 'bg-blue-400';
+                else if (day.status === 'ABSENT') color = 'bg-rose-200';
+
+                bar.className = `flex-1 ${color} rounded-sm min-w-[4px] transition-all hover:opacity-80`;
+                bar.title = `${day.date} (${day.day}): ${day.status}`;
+                bar.style.height = day.status === 'ABSENT' ? '20%' : '100%';
+                chart.appendChild(bar);
+            });
+
+            if (days.length > 0) {
+                document.getElementById('m-chart-start').textContent = days[0].date;
+                document.getElementById('m-chart-end').textContent = days[days.length - 1].date;
+            }
+        }
+
+        function renderDailyBreakdown(days) {
+            const container = document.getElementById('m-daily');
+            if (days.length === 0) {
+                container.innerHTML = '<p class="py-6 text-center text-slate-400 text-xs">No daily record found for this month.</p>';
+                return;
+            }
+
+            container.innerHTML = days.map(day => {
+                let badgeClass = 'badge-pill badge-neutral';
+                if (day.status === 'VERIFIED') badgeClass = 'badge-pill badge-present';
+                else if (day.status === 'LATE') badgeClass = 'badge-pill badge-late';
+                else if (day.status === 'ON_LEAVE') badgeClass = 'badge-pill badge-leave';
+                else if (day.status === 'ABSENT') badgeClass = 'badge-pill badge-absent';
+
+                let detail = '';
+                if (day.clock_in) {
+                    detail = `<span class="font-semibold text-slate-700">${day.clock_in}</span>`;
+                    if (day.clock_out) detail += ` <span class="text-slate-300">-</span> <span class="font-semibold text-slate-700">${day.clock_out}</span>`;
+                    if (day.duration) detail += ` <span class="text-slate-400 ml-1">(${day.duration})</span>`;
+                } else if (day.leave_type) {
+                    detail = `<span class="text-blue-600 font-semibold capitalize">${day.leave_type} Leave</span>`;
+                } else if (day.status === 'ABSENT') {
+                    detail = '<span class="text-rose-400 italic">No Clock In</span>';
+                }
+
+                let lateTag = '';
+                if (day.is_late) {
+                    lateTag = `<span class="px-2 py-0.5 text-[10px] font-bold rounded-md bg-amber-100 text-amber-700 ml-1">Late ${day.late_minutes}m</span>`;
+                }
+
+                return `
+                    <div class="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition">
+                        <div class="flex items-center space-x-3 min-w-0">
+                            <div class="w-14 text-xs font-bold text-slate-400">${day.day}</div>
+                            <div class="text-xs font-bold text-slate-800">${day.date.split('-').slice(1).join('/')}</div>
+                            ${lateTag}
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <div class="text-xs text-right">${detail}</div>
+                            <span class="${badgeClass}">${day.status}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        document.getElementById('modal-month').addEventListener('change', () => {
+            if (currentEmployeeId) loadEmployeeSummary(currentEmployeeId);
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if (!document.getElementById('employee-modal').classList.contains('hidden')) closeModal();
+                if (!document.getElementById('add-employee-modal').classList.contains('hidden')) closeAddEmployeeModal();
+                if (!document.getElementById('add-admin-modal').classList.contains('hidden')) closeAddAdminModal();
+            }
+        });
+
+        loadEmployees();
+    </script>

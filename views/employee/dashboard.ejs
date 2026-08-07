@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Dashboard - Attendance System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="bg-slate-50 text-slate-600 min-h-screen flex flex-col">
+    <!-- Navbar -->
+    <nav class="sticky top-0 z-40 glass-nav">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="w-9 h-9 bg-slate-900 rounded-xl flex items-center justify-center text-white">
+                    <i class="fa-solid fa-clock-rotate-left text-base"></i>
+                </div>
+                <div class="leading-tight">
+                    <span class="text-sm font-bold text-slate-900 tracking-tight">Attendance</span>
+                    <p class="text-[11px] text-slate-400 font-medium hidden sm:block">Employee Portal</p>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-3">
+                <div class="flex items-center space-x-2 bg-white border border-slate-200 rounded-full py-1.5 pl-1.5 pr-3 shadow-sm">
+                    <div class="w-6 h-6 bg-slate-900 rounded-full flex items-center justify-center text-white text-[11px] font-bold">
+                        <%= (user && user.name) ? user.name.charAt(0).toUpperCase() : 'E' %>
+                    </div>
+                    <span class="text-xs font-semibold text-slate-700 hidden sm:inline"><%= (user && user.name) ? user.name : 'Employee' %></span>
+                </div>
+                <a href="/employee/settings" class="text-xs font-semibold text-slate-500 hover:text-slate-900 bg-white border border-slate-200 hover:border-slate-300 px-3 py-2 rounded-lg transition shadow-sm">
+                    <i class="fa-solid fa-gear mr-1"></i>Settings
+                </a>
+                <a href="/logout" class="text-xs font-semibold text-slate-500 hover:text-rose-600 bg-white border border-slate-200 hover:border-rose-200 px-3 py-2 rounded-lg transition shadow-sm">
+                    <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-8 flex-1 w-full space-y-6">
+
+        <!-- a) Hero Header: greeting, real-time clock, status -->
+        <div class="surface-card p-6 sm:p-8 relative overflow-hidden">
+            <div class="absolute -top-20 -right-20 w-64 h-64 bg-slate-100 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div class="relative z-10 flex flex-col lg:flex-row justify-between lg:items-center gap-6">
+                <div>
+                    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5" id="live-full-date">Loading date...</p>
+                    <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mb-1">
+                        Hello, <%= (user && user.name) ? user.name.split(' ')[0] : 'there' %>.
+                    </h1>
+                    <p class="text-sm text-slate-500">Welcome back — here's your shift overview for today.</p>
+                </div>
+
+                <div class="flex items-center gap-4">
+                    <!-- Live clock -->
+                    <div class="text-right">
+                        <div class="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight tabular-nums" id="live-clock">00:00:00</div>
+                        <div class="flex items-center justify-end mt-1.5">
+                            <span class="inline-flex items-center space-x-1.5 text-xs font-semibold text-slate-500">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                <span id="live-day">Today</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Today's status -->
+            <div id="today-status" class="relative z-10 mt-6 pt-5 border-t border-slate-100">
+                <div class="w-full animate-pulse space-y-2.5">
+                    <div class="h-5 bg-slate-100 rounded-lg w-1/3"></div>
+                    <div class="h-4 bg-slate-100 rounded-lg w-2/3"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="status-message"></div>
+
+        <!-- b) Primary Action: Clock In / Clock Out -->
+        <div class="surface-card p-6 sm:p-7">
+            <div class="flex items-center justify-between mb-5">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900 tracking-tight">Shift Control</h2>
+                    <p class="text-xs text-slate-400 mt-0.5">Clock in to start your shift, clock out when finished.</p>
+                </div>
+                <span class="text-xs font-semibold text-slate-400 bg-slate-50 border border-slate-200 px-3 py-1 rounded-full">Today</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button id="clock-in-btn"
+                    class="group bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-5 rounded-xl shadow-sm transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-600 flex items-center justify-between text-left">
+                    <div>
+                        <span class="text-[11px] font-semibold text-emerald-100 uppercase tracking-wider block mb-0.5">Start Shift</span>
+                        <span class="text-lg font-extrabold tracking-tight">Clock In</span>
+                    </div>
+                    <div class="w-10 h-10 bg-white/15 rounded-lg flex items-center justify-center text-white text-base group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-play"></i>
+                    </div>
+                </button>
+
+                <button id="clock-out-btn"
+                    class="group bg-white border border-slate-200 text-slate-700 font-bold p-5 rounded-xl shadow-sm transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white hover:border-slate-300 flex items-center justify-between text-left">
+                    <div>
+                        <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-0.5">End Shift</span>
+                        <span class="text-lg font-extrabold tracking-tight">Clock Out</span>
+                    </div>
+                    <div class="w-10 h-10 bg-slate-100 group-hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-600 text-base group-hover:scale-110 transition-transform">
+                        <i class="fa-solid fa-stop"></i>
+                    </div>
+                </button>
+            </div>
+        </div>
+
+        <!-- c) Quick Activity Feed: recent attendance history -->
+        <div class="surface-card overflow-hidden">
+            <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900 tracking-tight">Recent Attendance</h2>
+                    <p class="text-xs text-slate-400 mt-0.5">Your latest clock-in and clock-out records</p>
+                </div>
+                <span class="text-xs font-semibold text-slate-400">Last 10 records</span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead class="text-[11px] uppercase tracking-wider font-semibold text-slate-400 border-b border-slate-100">
+                        <tr>
+                            <th class="py-3 px-6">Date</th>
+                            <th class="py-3 px-4">Clock In</th>
+                            <th class="py-3 px-4">Clock Out</th>
+                            <th class="py-3 px-4">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-list" class="divide-y divide-slate-100">
+                        <tr>
+                            <td colspan="4" class="py-10 text-center">
+                                <div class="animate-pulse space-y-2.5">
+                                    <div class="h-8 bg-slate-100 rounded-lg"></div>
+                                    <div class="h-8 bg-slate-100 rounded-lg"></div>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-auto py-6 border-t border-slate-200/80 bg-white/60">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 text-center text-xs text-slate-400 font-medium">
+            <p>&copy; <%= new Date().getFullYear() %> Attendance Management System. Bound to Office Device.</p>
+        </div>
+    </footer>
+
+    <script>
+        const API_BASE = '/api';
+        const AUTH_TOKEN = '<%= token || "" %>';
+        const DEVICE_ID = '<%= deviceId || "" %>';
+        const DAKHA_TIME_ZONE = 'Asia/Dhaka';
+
+        function dhakaDateParts(date = new Date()) {
+            const parts = new Intl.DateTimeFormat('en-US', {
+                timeZone: DAKHA_TIME_ZONE,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hourCycle: 'h23',
+            }).formatToParts(new Date(date));
+
+            const mapped = {};
+            for (const part of parts) {
+                if (part.type !== 'literal') mapped[part.type] = part.value;
+            }
+            return mapped;
+        }
+
+        function formatDhakaTime(date) {
+            return new Intl.DateTimeFormat('en-US', {
+                timeZone: DAKHA_TIME_ZONE,
+                hour: '2-digit',
+                minute: '2-digit',
+            }).format(new Date(date));
+        }
+
+        function formatDhakaDate(date, options) {
+            return new Intl.DateTimeFormat('en-US', {
+                timeZone: DAKHA_TIME_ZONE,
+                ...options,
+            }).format(new Date(date));
+        }
+
+        function dhakaDateInputValue() {
+            const parts = dhakaDateParts(new Date());
+            return `${parts.year}-${parts.month}-${parts.day}`;
+        }
+
+        // Digital Live Clock Update
+        function updateLiveClock() {
+            const now = new Date();
+            document.getElementById('live-clock').textContent = formatDhakaTime(now);
+            document.getElementById('live-day').textContent = formatDhakaDate(now, { weekday: 'long' });
+            document.getElementById('live-full-date').textContent = formatDhakaDate(now, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        }
+        setInterval(updateLiveClock, 1000);
+        updateLiveClock();
+
+        async function getStoredToken() {
+            if (AUTH_TOKEN && AUTH_TOKEN !== '') {
+                return AUTH_TOKEN;
+            }
+            return localStorage.getItem('token');
+        }
+
+        async function getStoredDeviceId() {
+            if (DEVICE_ID && DEVICE_ID !== '') {
+                return DEVICE_ID;
+            }
+            return localStorage.getItem('deviceId');
+        }
+
+        async function fetchWithAuth(url, options = {}) {
+            const token = await getStoredToken();
+            const deviceId = await getStoredDeviceId();
+
+            const headers = {
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                ...(deviceId ? { 'X-Device-UUID': deviceId } : {}),
+            };
+
+            const response = await fetch(url, {
+                ...options,
+                headers: {
+                    ...headers,
+                    ...options.headers,
+                },
+            });
+            return response;
+        }
+
+        async function renderTodayStatus() {
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/attendance/today`);
+                const data = await response.json();
+
+                const container = document.getElementById('today-status');
+
+                if (data.on_leave) {
+                    container.innerHTML = `
+                        <div class="w-full">
+                            <div class="flex items-center justify-between">
+                                <span class="badge-pill badge-leave"><span class="badge-dot"></span>ON LEAVE</span>
+                                <span class="text-xs font-semibold text-blue-600">Full Day Approved Leave</span>
+                            </div>
+                            <p class="text-xs text-slate-500 font-medium mt-2">You are registered as on leave today. Clock in is paused.</p>
+                        </div>
+                    `;
+                    document.getElementById('clock-in-btn').disabled = true;
+                    document.getElementById('clock-out-btn').disabled = true;
+                } else if (data.clocked_out) {
+                    const pl = data.partial_leave;
+                    const partialBadge = pl
+                        ? `<span class="badge-pill badge-leave"><span class="badge-dot"></span>${pl.label || pl.type}</span>`
+                        : '';
+                    container.innerHTML = `
+                        <div class="w-full space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="badge-pill badge-neutral"><span class="badge-dot"></span>CLOCKED OUT</span>
+                                ${data.is_late ? `<span class="badge-pill badge-late"><span class="badge-dot"></span>Late ${data.late_minutes}m</span>` : ''}
+                                ${partialBadge}
+                            </div>
+                            <div class="grid grid-cols-2 gap-4 bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
+                                <div>
+                                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Clock In</span>
+                                    <p class="${data.is_late ? 'text-amber-600' : 'text-slate-900'} font-extrabold text-sm mt-0.5">${formatDhakaTime(data.clock_in_time)}</p>
+                                </div>
+                                <div>
+                                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Clock Out</span>
+                                    <p class="text-slate-900 font-extrabold text-sm mt-0.5">${formatDhakaTime(data.clock_out_time)}</p>
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-center text-xs font-semibold text-slate-600">
+                                <span>Shift Work Duration: <b>${data.work_duration}</b></span>
+                            </div>
+                        </div>
+                    `;
+                    document.getElementById('clock-in-btn').disabled = true;
+                    document.getElementById('clock-out-btn').disabled = true;
+                } else if (data.clocked_in) {
+                    const pl = data.partial_leave;
+                    const partialBadge = pl
+                        ? `<span class="badge-pill badge-leave"><span class="badge-dot"></span>${pl.label || pl.type}</span>`
+                        : '';
+                    container.innerHTML = `
+                        <div class="w-full space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span class="badge-pill badge-present"><span class="badge-dot"></span>ACTIVE SESSION (CLOCKED IN)</span>
+                                ${data.is_late ? `<span class="badge-pill badge-late"><span class="badge-dot"></span>Late by ${data.late_minutes}m</span>` : ''}
+                                ${partialBadge}
+                            </div>
+                            <p class="text-xs text-slate-500 font-medium mt-1">Clocked in at <b class="text-slate-800">${formatDhakaTime(data.clock_in_time)}</b></p>
+                        </div>
+                    `;
+                    document.getElementById('clock-in-btn').disabled = true;
+                    document.getElementById('clock-out-btn').disabled = false;
+                } else {
+                    const pl = data.partial_leave;
+                    const effectiveStart = data.office_start_time || '09:00';
+                    const [h, m] = effectiveStart.split(':').map(Number);
+                    const grace = data.grace_period_minutes || 10;
+                    const deadlineMinutes = h * 60 + m + grace;
+                    const deadlineH = Math.floor(deadlineMinutes / 60).toString().padStart(2, '0');
+                    const deadlineM = (deadlineMinutes % 60).toString().padStart(2, '0');
+                    const partialNote = pl
+                        ? `<p class="text-xs text-indigo-600 font-semibold mt-1">Partial leave approved (${pl.from} - ${pl.to}).</p>`
+                        : '';
+                    container.innerHTML = `
+                        <div class="w-full">
+                            <div class="flex items-center space-x-2">
+                                <span class="badge-pill badge-neutral"><span class="badge-dot"></span>NOT CLOCKED IN</span>
+                            </div>
+                            <p class="text-xs text-slate-500 font-medium mt-2">Shift starts at <b>${effectiveStart}</b>. Marked late after <b>${deadlineH}:${deadlineM}</b>.</p>
+                            ${partialNote}
+                        </div>
+                    `;
+                    document.getElementById('clock-in-btn').disabled = false;
+                    document.getElementById('clock-out-btn').disabled = true;
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function loadHistory() {
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/attendance/logs`);
+                const data = await response.json();
+
+                const container = document.getElementById('history-list');
+                if (!data.data || data.data.length === 0) {
+                    container.innerHTML = `
+                        <tr>
+                            <td colspan="4" class="py-12 text-center text-slate-400 text-xs font-medium">
+                                <i class="fa-regular fa-folder-open text-xl text-slate-300 mb-1 block"></i>
+                                <span>No attendance logs registered yet.</span>
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = data.data.slice(0, 10).map(log => {
+                    const date = formatDhakaDate(log.clockInTime, { weekday: 'short', month: 'short', day: 'numeric' });
+                    const inTime = formatDhakaTime(log.clockInTime);
+                    const outTime = log.clockOutTime ? formatDhakaTime(log.clockOutTime) : '—';
+                    const logStatus = (log.status || 'VERIFIED').toUpperCase();
+                    const statusChip = logStatus === 'ON_LEAVE'
+                        ? `<span class="status-chip status-chip-blue"><span class="badge-dot" style="background-color:#3b82f6"></span>On Leave</span>`
+                        : log.clockOutTime
+                        ? `<span class="status-chip status-chip-gray"><span class="badge-dot" style="background-color:#94a3b8"></span>Clocked Out</span>`
+                        : `<span class="status-chip status-chip-green"><span class="badge-dot"></span>Active</span>`;
+                    return `
+                        <tr class="hover:bg-slate-50/70 transition-colors">
+                            <td class="py-3.5 px-6">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-8 h-8 bg-slate-50 border border-slate-200 text-slate-500 rounded-lg flex items-center justify-center text-xs">
+                                        <i class="fa-regular fa-calendar-check"></i>
+                                    </div>
+                                    <span class="text-sm font-semibold text-slate-900">${date}</span>
+                                </div>
+                            </td>
+                            <td class="py-3.5 px-4 text-sm font-medium text-slate-700 tabular-nums">${inTime}</td>
+                            <td class="py-3.5 px-4 text-sm font-medium text-slate-700 tabular-nums">${outTime}</td>
+                            <td class="py-3.5 px-4">${statusChip}</td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function showMessage(msg, type = 'info') {
+            const container = document.getElementById('status-message');
+            const icons = {
+                success: '<i class="fa-solid fa-circle-check text-emerald-500 text-base mr-2"></i>',
+                error: '<i class="fa-solid fa-circle-exclamation text-rose-500 text-base mr-2"></i>',
+                info: '<i class="fa-solid fa-circle-info text-blue-500 text-base mr-2"></i>',
+            };
+            const styles = {
+                success: 'bg-emerald-50/90 border-emerald-200 text-emerald-800 shadow-sm',
+                error: 'bg-rose-50/90 border-rose-200 text-rose-800 shadow-sm',
+                info: 'bg-blue-50/90 border-blue-200 text-blue-800 shadow-sm',
+            };
+            container.innerHTML = `
+                <div class="${styles[type]} border px-4 py-3.5 rounded-xl text-sm font-semibold flex items-center animate-fade-in">
+                    ${icons[type] || ''}
+                    <span>${msg}</span>
+                </div>
+            `;
+            setTimeout(() => {
+                if (container) container.innerHTML = '';
+            }, 5000);
+        }
+
+        document.getElementById('clock-in-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('clock-in-btn');
+            btn.disabled = true;
+
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/attendance/clock-in`, {
+                    method: 'POST',
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('Clock-in recorded successfully!', 'success');
+                    renderTodayStatus();
+                } else {
+                    showMessage(data.message || 'Clock-in failed', 'error');
+                }
+            } catch (err) {
+                showMessage('Network error. Please try again.', 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        document.getElementById('clock-out-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('clock-out-btn');
+            btn.disabled = true;
+
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/attendance/clock-out`, {
+                    method: 'POST',
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('Clock-out recorded successfully!', 'success');
+                    renderTodayStatus();
+                } else {
+                    showMessage(data.message || 'Clock-out failed', 'error');
+                }
+            } catch (err) {
+                showMessage('Network error. Please try again.', 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        renderTodayStatus();
+        loadHistory();
+    </script>
+</body>
+</html>
