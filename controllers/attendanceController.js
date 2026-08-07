@@ -258,7 +258,7 @@ async function getTodayStatus(req, res) {
     }
 
     const clockIn = new Date(log.clockInTime);
-    const deadline = new Date(deadlineEpoch(log.shiftDate, startHour, startMin + graceMinutes));
+    const deadline = new Date(deadlineEpoch(localDateStr(new Date(clockIn)), startHour, startMin + graceMinutes));
     const isLate = clockIn > deadline;
     const lateMinutes = isLate ? Math.floor((clockIn - deadline) / 60000) : 0;
 

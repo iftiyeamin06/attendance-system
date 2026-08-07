@@ -227,8 +227,8 @@ async function adminDashboard(req, res) {
         const partialLeave = partialByUser[uid] || null;
 
         const [startHour, startMin] = officeStartTime.split(':').map(Number);
-        const shiftDate = log.shiftDate || localDateStr(new Date(clockIn));
-        const deadline = new Date(deadlineEpoch(shiftDate, startHour, startMin + graceMinutes));
+        const logDate = localDateStr(new Date(clockIn));
+        const deadline = new Date(deadlineEpoch(logDate, startHour, startMin + graceMinutes));
         const isLate = clockIn > deadline;
 
         return {
