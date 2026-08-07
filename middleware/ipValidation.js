@@ -9,9 +9,6 @@ function normalizeIp(ip) {
 }
 
 async function ipValidationMiddleware(req, res, next) {
-  const rawClientIp = extractClientIp(req);
-  const clientIp = normalizeIp(rawClientIp);
-
   let allowedIp;
 
   allowedIp = await cache.getOfficeIP();
@@ -28,19 +25,33 @@ async function ipValidationMiddleware(req, res, next) {
     allowedIp = process.env.OFFICE_PUBLIC_IP;
   }
 
-  const normalizedAllowedIp = normalizeIp(allowedIp);
-  const matched = candidateIps(req).some((ip) => ip === normalizedAllowedIp);
+  const allowedIps = [...new Set([allowedIp, process.env.OFFICE_PUBLIC_IP].filter(Boolean))]
+    .map(normalizeIp);
+
+  const detectedIps = candidateIps(req);
+
+  const firstForwarded = (() => {
+    const fwd = req.headers['x-forwarded-for'];
+    if (fwd && typeof fwd === 'string') return normalizeIp(fwd.split(',')[0].trim());
+    return null;
+  })();
+
+  const matchesAllowed = (ip) => ip && allowedIps.includes(normalizeIp(ip));
+  const matched =
+    (firstForwarded && allowedIps.includes(firstForwarded)) ||
+    detectedIps.some(matchesAllowed);
 
   if (!matched) {
     return res.status(403).json({
       success: false,
       message: 'Clock-in failed. Please connect to the Official Office Wi-Fi.',
       error_code: 'OFFICE_IP_MISMATCH',
-      detected_ips: candidateIps(req),
+      detected_ips: detectedIps,
+      allowed_ips: allowedIps,
     });
   }
 
-  req.ipValidationResult = { valid: true, clientIp: candidateIps(req)[0], allowedIp };
+  req.ipValidationResult = { valid: true, clientIp: detectedIps[0], allowedIps };
   next();
 }
 
