@@ -4,6 +4,10 @@ async function deviceValidationMiddleware(req, res, next) {
   const deviceUuid = req.headers['x-device-uuid'];
 
   if (!deviceUuid) {
+    console.error(
+      `[device-validation] Missing X-Device-UUID header for user ${req.user?.id || req.user?.email || 'unknown'}. ` +
+      'The frontend must send a device identifier with every clock-in/clock-out request.'
+    );
     return res.status(403).json({
       success: false,
       message: 'Missing device identifier. Send X-Device-UUID header.',

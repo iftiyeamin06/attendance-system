@@ -135,17 +135,9 @@ app.get('/admin/settings', requireAdminWeb, async (req, res) => {
 });
 
 app.get('/employee/dashboard', requireWebAuth, async (req, res) => {
-  let deviceId = req.session.deviceId || req.session.user.boundDeviceId;
-
-  if (!deviceId) {
-    deviceId = 'device_' + req.session.user.id.substring(0, 8) + '_' + Date.now();
-    req.session.deviceId = deviceId;
-  }
-
   res.render('employee/dashboard', {
     user: req.session.user,
     token: req.session.token,
-    deviceId: deviceId,
   });
 });
 

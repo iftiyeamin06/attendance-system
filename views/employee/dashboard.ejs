@@ -222,11 +222,19 @@
             return localStorage.getItem('token');
         }
 
-        async function getStoredDeviceId() {
-            if (DEVICE_ID && DEVICE_ID !== '') {
-                return DEVICE_ID;
+        function ensureDeviceId() {
+            let deviceId = localStorage.getItem('deviceId');
+            if (!deviceId) {
+                deviceId = 'device_' + Date.now() + '_' +
+                    Math.random().toString(36).substring(2, 10) +
+                    Math.random().toString(36).substring(2, 10);
+                localStorage.setItem('deviceId', deviceId);
             }
-            return localStorage.getItem('deviceId');
+            return deviceId;
+        }
+
+        async function getStoredDeviceId() {
+            return ensureDeviceId();
         }
 
         async function fetchWithAuth(url, options = {}) {
