@@ -61,7 +61,7 @@ async function runTests() {
   console.log('\n2. Authentication');
   const loginRes = await request('POST', '/api/auth/login', {
     email: 'iftiyeamin06@gmail.com',
-    password: 'ifti123',
+    password: 'ifti1234',
   });
   test('Login with valid credentials', loginRes.status === 200, `Status: ${loginRes.status}`);
 

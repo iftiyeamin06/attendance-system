@@ -8,5 +8,6 @@ router.use(authMiddleware);
 
 router.post('/register', deviceController.registerDevice);
 router.get('/status', deviceController.checkDeviceStatus);
+router.get('/my-ip', deviceController.myIp);
 
 module.exports = router;

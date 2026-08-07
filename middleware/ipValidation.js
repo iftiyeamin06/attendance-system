@@ -29,21 +29,28 @@ async function ipValidationMiddleware(req, res, next) {
   }
 
   const normalizedAllowedIp = normalizeIp(allowedIp);
+  const matched = candidateIps(req).some((ip) => ip === normalizedAllowedIp);
 
-  if (clientIp !== normalizedAllowedIp) {
+  if (!matched) {
     return res.status(403).json({
       success: false,
       message: 'Clock-in failed. Please connect to the Official Office Wi-Fi.',
       error_code: 'OFFICE_IP_MISMATCH',
+      detected_ips: candidateIps(req),
     });
   }
 
-  req.ipValidationResult = { valid: true, clientIp, allowedIp };
+  req.ipValidationResult = { valid: true, clientIp: candidateIps(req)[0], allowedIp };
   next();
 }
 
 function extractClientIp(req) {
-  return (
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded && typeof forwarded === 'string') {
+    const first = forwarded.split(',')[0].trim();
+    if (first) return normalizeIp(first);
+  }
+  return normalizeIp(
     req.ip ||
     req.connection?.remoteAddress ||
     req.socket?.remoteAddress ||
@@ -52,4 +59,18 @@ function extractClientIp(req) {
   );
 }
 
-module.exports = { ipValidationMiddleware, extractClientIp };
+function candidateIps(req) {
+  const candidates = [];
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded && typeof forwarded === 'string') {
+    forwarded.split(',').forEach((p) => {
+      const ip = normalizeIp(p.trim());
+      if (ip && ip !== 'unknown') candidates.push(ip);
+    });
+  }
+  const local = extractClientIp(req);
+  if (local && !candidates.includes(local)) candidates.push(local);
+  return candidates;
+}
+
+module.exports = { ipValidationMiddleware, extractClientIp, candidateIps };

@@ -63,4 +63,18 @@ async function checkDeviceStatus(req, res) {
   }
 }
 
-module.exports = { registerDevice, checkDeviceStatus };
+async function myIp(req, res) {
+  try {
+    const { extractClientIp, candidateIps } = require('../middleware/ipValidation');
+    return res.json({
+      success: true,
+      detected_ip: extractClientIp(req),
+      candidate_ips: candidateIps(req),
+      configured_office_ip: process.env.OFFICE_PUBLIC_IP || null,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+module.exports = { registerDevice, checkDeviceStatus, myIp };
