@@ -83,6 +83,19 @@ function currentDateInputValue(timeZone = ATTENDANCE_TIME_ZONE) {
   return formatYmd(year, month, day);
 }
 
+// Return the UTC epoch (ms) representing the given shiftDate string (YYYY-MM-DD
+// in the attendance time zone) at the given local wall-clock hour:minute.
+// This is a timezone-aware replacement for Date.UTC(...) which would otherwise
+// misinterpret the shift date as UTC.
+function deadlineEpoch(shiftDateStr, hour, minute, timeZone = ATTENDANCE_TIME_ZONE) {
+  const [Y, M, D] = shiftDateStr.split('-').map(Number);
+  const probe = new Date(Date.UTC(Y, M - 1, D, 12, 0, 0));
+  const parts = getZonedDateParts(probe, timeZone);
+  const wallMs = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  const offsetMs = wallMs - probe.getTime();
+  return Date.UTC(Y, M - 1, D, hour, minute, 0) - offsetMs;
+}
+
 function computeShiftDate(date) {
   const { year, month, day, hour } = getZonedDateParts(date);
   const shifted = new Date(Date.UTC(year, month - 1, day));
@@ -106,4 +119,5 @@ module.exports = {
   formatMonthLabel,
   currentDateInputValue,
   computeShiftDate,
+  deadlineEpoch,
 };

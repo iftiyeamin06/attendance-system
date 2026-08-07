@@ -40,64 +40,6 @@
             </div>
         </div>
 
-        <!-- KPI Summary Cards -->
-        <div class="mb-6">
-            <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Executive Summary</h2>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div class="card-kpi card-kpi-blue p-5 flex flex-col justify-between">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold text-blue-700 uppercase tracking-wider">Scheduled Shifts</span>
-                        <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">
-                            <i class="fa-solid fa-clock text-sm"></i>
-                        </div>
-                    </div>
-                    <div class="mt-3 flex items-baseline justify-between">
-                        <p id="kpi-shifts" class="text-3xl font-extrabold text-slate-900">0</p>
-                        <span class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/50">Total</span>
-                    </div>
-                </div>
-
-                <div class="card-kpi card-kpi-emerald p-5 flex flex-col justify-between">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold text-emerald-700 uppercase tracking-wider">On-Time</span>
-                        <div class="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600">
-                            <i class="fa-solid fa-check-circle text-sm"></i>
-                        </div>
-                    </div>
-                    <div class="mt-3 flex items-baseline justify-between">
-                        <p id="kpi-ontime" class="text-3xl font-extrabold text-slate-900">0</p>
-                        <span class="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/50">Clock-Ins</span>
-                    </div>
-                </div>
-
-                <div class="card-kpi card-kpi-amber p-5 flex flex-col justify-between">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold text-amber-700 uppercase tracking-wider">Late Arrivals</span>
-                        <div class="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center text-amber-600">
-                            <i class="fa-solid fa-triangle-exclamation text-sm"></i>
-                        </div>
-                    </div>
-                    <div class="mt-3 flex items-baseline justify-between">
-                        <p id="kpi-late" class="text-3xl font-extrabold text-slate-900">0</p>
-                        <span class="text-[11px] font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/50">Incidents</span>
-                    </div>
-                </div>
-
-                <div class="card-kpi card-kpi-indigo p-5 flex flex-col justify-between">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold text-indigo-700 uppercase tracking-wider">Approved Leaves</span>
-                        <div class="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center text-indigo-600">
-                            <i class="fa-solid fa-calendar-check text-sm"></i>
-                        </div>
-                    </div>
-                    <div class="mt-3 flex items-baseline justify-between">
-                        <p id="kpi-leaves" class="text-3xl font-extrabold text-slate-900">0</p>
-                        <span class="text-[11px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200/50">Total</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Employee Report Table -->
         <div class="surface-card overflow-hidden">
             <div class="px-6 py-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
@@ -126,13 +68,12 @@
                             <th class="py-3.5 px-4 text-center">Hours</th>
                             <th class="py-3.5 px-4 text-center">On-Time</th>
                             <th class="py-3.5 px-4 text-center">Late</th>
-                            <th class="py-3.5 px-4 text-center">Leave</th>
                             <th class="py-3.5 px-4 text-center">Absent</th>
                         </tr>
                     </thead>
                     <tbody id="report-table" class="divide-y divide-slate-100">
                         <tr>
-                            <td colspan="7" class="py-12 text-center text-slate-400">
+                            <td colspan="6" class="py-12 text-center text-slate-400">
                                 <div class="inline-flex items-center space-x-2">
                                     <i class="fa-solid fa-circle-notch fa-spin text-indigo-500 text-base"></i>
                                     <span>Loading report...</span>
@@ -144,10 +85,7 @@
             </div>
         </div>
 
-<%- include('partials/layout-footer') %>
-
     <script>
-        let allData = [];
         const DAKHA_TIME_ZONE = 'Asia/Dhaka';
 
         function dhakaDateParts(date = new Date()) {
@@ -174,16 +112,6 @@
             return new Date(Number(parts.year), Number(parts.month) - 1, 1);
         }
 
-        // Initialize selects to current month/year
-        (function init() {
-            const now = dhakaMonthYearDate();
-            const monthSelect = document.getElementById('month-select');
-            const yearSelect = document.getElementById('year-select');
-            monthSelect.value = now.getMonth();
-            yearSelect.value = now.getFullYear();
-            loadReport();
-        })();
-
         async function loadReport() {
             const month = document.getElementById('month-select').value;
             const year = document.getElementById('year-select').value;
@@ -193,20 +121,11 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    allData = data.data;
-                    renderKpis(data.data.kpi);
                     renderTable(data.data.employees);
                 }
             } catch (err) {
                 console.error('Failed to load report:', err);
             }
-        }
-
-        function renderKpis(kpi) {
-            document.getElementById('kpi-shifts').textContent = kpi.total_shifts || 0;
-            document.getElementById('kpi-ontime').textContent = kpi.total_on_time || 0;
-            document.getElementById('kpi-late').textContent = kpi.total_late || 0;
-            document.getElementById('kpi-leaves').textContent = kpi.total_leaves || 0;
         }
 
         function renderTable(employees) {
@@ -215,7 +134,7 @@
             if (!employees || employees.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="7" class="py-12 text-center text-slate-400">
+                        <td colspan="6" class="py-12 text-center text-slate-400">
                             <i class="fa-regular fa-folder-open text-2xl text-slate-300 mb-2 block"></i>
                             <span>No employees found for this period.</span>
                         </td>
@@ -258,9 +177,6 @@
                             <span class="px-3 py-1 text-xs font-bold rounded-xl border bg-amber-50 text-amber-700 border-amber-200">${emp.late_days}</span>
                         </td>
                         <td class="py-3.5 px-4 text-center">
-                            <span class="px-3 py-1 text-xs font-bold rounded-xl border bg-blue-50 text-blue-700 border-blue-200">${emp.leave_days}</span>
-                        </td>
-                        <td class="py-3.5 px-4 text-center">
                             <span class="px-3 py-1 text-xs font-bold rounded-xl border bg-rose-50 text-rose-700 border-rose-200">${emp.absent_days}</span>
                         </td>
                     </tr>
@@ -295,4 +211,16 @@
                 console.error('Export failed:', err);
             }
         }
+
+        // Initialize selects to current month/year and load report
+        document.addEventListener('DOMContentLoaded', function () {
+            const now = dhakaMonthYearDate();
+            const monthSelect = document.getElementById('month-select');
+            const yearSelect = document.getElementById('year-select');
+            monthSelect.value = now.getMonth();
+            yearSelect.value = now.getFullYear();
+            loadReport();
+        });
     </script>
+
+<%- include('partials/layout-footer') %>

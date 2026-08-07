@@ -3,7 +3,7 @@ const cache = require('../redis/cache');
 const { extractClientIp } = require('../middleware/ipValidation');
 const { getOfficeTimes } = require('./leaveController');
 const { Op } = require('sequelize');
-const { localDateStr, computeShiftDate } = require('../utils/date');
+const { localDateStr, computeShiftDate, deadlineEpoch } = require('../utils/date');
 
 async function clockIn(req, res) {
   try {
@@ -226,8 +226,6 @@ async function getTodayStatus(req, res) {
     });
 
     const [startHour, startMin] = officeStartTime.split(':').map(Number);
-    const [shiftYear, shiftMonth, shiftDay] = log.shiftDate.split('-');
-    const deadline = new Date(Date.UTC(+shiftYear, +shiftMonth - 1, +shiftDay, startHour, startMin + graceMinutes, 0));
 
     if (!log) {
       return res.json({
@@ -260,6 +258,7 @@ async function getTodayStatus(req, res) {
     }
 
     const clockIn = new Date(log.clockInTime);
+    const deadline = new Date(deadlineEpoch(log.shiftDate, startHour, startMin + graceMinutes));
     const isLate = clockIn > deadline;
     const lateMinutes = isLate ? Math.floor((clockIn - deadline) / 60000) : 0;
 

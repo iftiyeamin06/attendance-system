@@ -9,6 +9,7 @@ const {
   formatTime,
   formatWeekday,
   formatMonthLabel,
+  deadlineEpoch,
 } = require('../utils/date');
 
 function calculateDuration(clockIn, clockOut) {
@@ -649,8 +650,8 @@ async function getEmployeeMonthlySummary(req, res) {
         }
 
         if (clockIn) {
-          const [shiftYear, shiftMonth, shiftDay] = log.shiftDate.split('-');
-          const deadline = new Date(Date.UTC(+shiftYear, +shiftMonth - 1, +shiftDay, startH, startM + graceMinutes, 0));
+          const shiftDate = dayLog.shiftDate || localDateStr(new Date(clockIn));
+          const deadline = new Date(deadlineEpoch(shiftDate, startH, startM + graceMinutes));
           if (new Date(clockIn) > deadline) {
             isLate = true;
             lateMin = Math.floor((new Date(clockIn) - deadline) / 60000);
@@ -869,8 +870,8 @@ async function getAllEmployeesMonthlySummary(req, res) {
           kpiTotalShifts++;
 
           if (clockIn) {
-            const [shiftYear, shiftMonth, shiftDay] = dayLog.shiftDate.split('-');
-            const deadline = new Date(Date.UTC(+shiftYear, +shiftMonth - 1, +shiftDay, startH, startM + graceMinutes, 0));
+            const shiftDate = dayLog.shiftDate || localDateStr(clockIn);
+            const deadline = new Date(deadlineEpoch(shiftDate, startH, startM + graceMinutes));
             const isLate = clockIn > deadline;
             if (isLate) {
               lateCount++;
