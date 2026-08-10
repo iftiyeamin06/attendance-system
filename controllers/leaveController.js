@@ -88,6 +88,7 @@ async function createLeave(req, res) {
       partialFrom: leave_type === 'partial' ? partial_from : null,
       partialTo: leave_type === 'partial' ? partial_to : null,
       notes: notes || null,
+      status: 'Approved',
       createdBy: req.user.id,
     });
 
@@ -109,6 +110,7 @@ async function createLeave(req, res) {
         partial_from: leave.partialFrom,
         partial_to: leave.partialTo,
         notes: leave.notes,
+        status: leave.status,
       },
     });
   } catch (err) {
@@ -183,11 +185,170 @@ async function getLeaves(req, res) {
           partial_to: l.partialTo,
           partial_label: partialInfo?.label || null,
           notes: l.notes,
+          status: l.status || 'Pending',
         };
       }),
     });
   } catch (err) {
     console.error('Get leaves error:', err);
+    return res.status(500).json({ success: false, message: 'An error occurred.' });
+  }
+}
+
+async function submitLeaveRequest(req, res) {
+  try {
+    const { start_date, end_date, leave_type, notes, partial_hours, partial_from, partial_to } = req.body;
+
+    if (!start_date || !end_date || !leave_type) {
+      return res.status(400).json({
+        success: false,
+        message: 'start_date, end_date, and leave_type are required.',
+      });
+    }
+
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Unauthorized.' });
+    }
+
+    if (leave_type === 'partial' && (!partial_from || !partial_to)) {
+      return res.status(400).json({
+        success: false,
+        message: 'partial_from and partial_to are required for partial leaves.',
+      });
+    }
+
+    let hours = partial_hours;
+    if (leave_type === 'partial' && !hours) {
+      const fromParts = partial_from.split(':').map(Number);
+      const toParts = partial_to.split(':').map(Number);
+      hours = (toParts[0] * 60 + toParts[1] - fromParts[0] * 60 - fromParts[1]) / 60;
+    }
+
+    const leave = await Leave.create({
+      userId: user.id,
+      startDate: start_date,
+      endDate: end_date,
+      leaveType: leave_type,
+      partialHours: leave_type === 'partial' ? hours : null,
+      partialFrom: leave_type === 'partial' ? partial_from : null,
+      partialTo: leave_type === 'partial' ? partial_to : null,
+      notes: notes || null,
+      status: 'Pending',
+      createdBy: user.id,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Leave request submitted. Waiting for admin approval.',
+      data: {
+        id: leave.id,
+        user_id: leave.userId,
+        start_date: leave.startDate,
+        end_date: leave.endDate,
+        leave_type: leave.leaveType,
+        partial_hours: leave.partialHours,
+        partial_from: leave.partialFrom,
+        partial_to: leave.partialTo,
+        notes: leave.notes,
+        status: leave.status,
+      },
+    });
+  } catch (err) {
+    console.error('Submit leave request error:', err);
+    return res.status(500).json({ success: false, message: 'An error occurred while submitting the request.' });
+  }
+}
+
+async function getMyLeaveRequests(req, res) {
+  try {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Unauthorized.' });
+    }
+
+    const leaves = await Leave.findAll({
+      where: { userId: user.id },
+      order: [['createdAt', 'DESC']],
+    });
+
+    const officeTimes = await getOfficeTimes();
+
+    return res.json({
+      success: true,
+      data: leaves.map((l) => {
+        let partialInfo = null;
+        if (l.leaveType === 'partial') {
+          partialInfo = detectPartialLeaveType(l.partialFrom, l.partialTo, officeTimes.start, officeTimes.end);
+        }
+        return {
+          id: l.id,
+          start_date: l.startDate,
+          end_date: l.endDate,
+          leave_type: l.leaveType,
+          partial_hours: l.partialHours,
+          partial_from: l.partialFrom,
+          partial_to: l.partialTo,
+          partial_label: partialInfo?.label || null,
+          notes: l.notes,
+          status: l.status || 'Pending',
+          created_at: l.createdAt,
+        };
+      }),
+    });
+  } catch (err) {
+    console.error('Get my leave requests error:', err);
+    return res.status(500).json({ success: false, message: 'An error occurred.' });
+  }
+}
+
+async function updateLeaveStatus(req, res) {
+  try {
+    const { leaveId } = req.params;
+    const { status } = req.body;
+
+    if (!['Approved', 'Rejected'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'status must be "Approved" or "Rejected".',
+      });
+    }
+
+    const leave = await Leave.findByPk(leaveId);
+    if (!leave) {
+      return res.status(404).json({ success: false, message: 'Leave request not found.' });
+    }
+
+    const previousStatus = leave.status;
+    leave.status = status;
+    await leave.save();
+
+    if (leave.leaveType !== 'partial') {
+      if (status === 'Approved') {
+        await syncLeaveToAttendance(leave);
+      } else if (previousStatus === 'Approved' && status === 'Rejected') {
+        const start = new Date(leave.startDate + 'T00:00:00');
+        const end = new Date(leave.endDate + 'T23:59:59.999');
+        await AttendanceLog.destroy({
+          where: {
+            userId: leave.userId,
+            status: 'ON_LEAVE',
+            clockInTime: { [Op.gte]: start, [Op.lte]: end },
+          },
+        });
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `Leave request ${status}.`,
+      data: {
+        id: leave.id,
+        status: leave.status,
+      },
+    });
+  } catch (err) {
+    console.error('Update leave status error:', err);
     return res.status(500).json({ success: false, message: 'An error occurred.' });
   }
 }
@@ -225,4 +386,4 @@ async function syncLeaveToAttendance(leave) {
   }
 }
 
-module.exports = { createLeave, deleteLeave, getLeaves, syncLeaveToAttendance, detectPartialLeaveType, getOfficeTimes, timeToMinutes };
+module.exports = { createLeave, deleteLeave, getLeaves, submitLeaveRequest, getMyLeaveRequests, updateLeaveStatus, syncLeaveToAttendance, detectPartialLeaveType, getOfficeTimes, timeToMinutes };

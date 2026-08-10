@@ -663,6 +663,7 @@ async function getEmployeeMonthlySummary(req, res) {
     const leaves = await Leave.findAll({
       where: {
         userId,
+        status: 'Approved',
         [Op.or]: [
           { startDate: { [Op.lte]: monthEndStr }, endDate: { [Op.gte]: monthStartStr } },
         ],
@@ -891,6 +892,7 @@ async function getAllEmployeesMonthlySummary(req, res) {
         userId: {
           [Op.in]: employees.map(e => e.id),
         },
+        status: 'Approved',
         [Op.or]: [
           { startDate: { [Op.lte]: monthEndStr }, endDate: { [Op.gte]: monthStartStr } },
         ],
@@ -1049,6 +1051,7 @@ async function exportMonthlyReportCsv(req, res) {
     const leaves = await Leave.findAll({
       where: {
         userId: { [Op.in]: employees.map(e => e.id) },
+        status: 'Approved',
         [Op.or]: [
           { startDate: { [Op.lte]: monthEndStr }, endDate: { [Op.gte]: monthStartStr } },
         ],

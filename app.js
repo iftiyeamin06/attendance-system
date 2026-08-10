@@ -47,11 +47,13 @@ const authRoutes = require('./routes/authRoutes');
 const deviceRoutes = require('./routes/deviceRoutes');
 const attendanceRoutes = require('./routes/attendanceRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const leaveRoutes = require('./routes/leaveRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/device', deviceRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/leaves', leaveRoutes);
 
 function homePathFor(user) {
   if (user && user.role === 'admin') return '/admin/dashboard';
@@ -139,6 +141,14 @@ app.get('/employee/dashboard', requireWebAuth, async (req, res) => {
     user: req.session.user,
     token: req.session.token,
     deviceId: req.user?.boundDeviceId || req.session?.deviceId || '',
+  });
+});
+
+app.get('/employee/leave', requireWebAuth, async (req, res) => {
+  res.render('employee/leave', {
+    user: req.session.user,
+    token: req.session.token,
+    title: 'Leave Requests',
   });
 });
 

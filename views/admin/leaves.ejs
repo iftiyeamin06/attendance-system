@@ -228,12 +228,13 @@
                             <th class="py-3 px-4">Type</th>
                             <th class="py-3 px-4">Date Range</th>
                             <th class="py-3 px-4">Details</th>
+                            <th class="py-3 px-4">Status</th>
                             <th class="py-3 px-6">Action</th>
                         </tr>
                     </thead>
                     <tbody id="leaves-list" class="divide-y divide-slate-100">
                         <tr>
-                            <td colspan="5" class="py-12 text-center text-slate-400 text-sm">
+                            <td colspan="6" class="py-12 text-center text-slate-400 text-sm">
                                 <div class="inline-flex items-center space-x-2">
                                     <i class="fa-solid fa-circle-notch fa-spin text-indigo-500 text-base"></i>
                                     <span>Loading leaves...</span>
@@ -333,7 +334,9 @@
                 const data = await response.json();
                 const container = document.getElementById('leaves-list');
 
-                const leaves = data.data || [];
+                let leaves = data.data || [];
+                const order = { Pending: 0, Approved: 1, Rejected: 2 };
+                leaves = leaves.sort((a, b) => (order[a.status] ?? 3) - (order[b.status] ?? 3));
                 let total = 0, sick = 0, paid = 0, partial = 0;
                 leaves.forEach(l => {
                     total++;
@@ -349,7 +352,7 @@
                 if (leaves.length === 0) {
                     container.innerHTML = `
                         <tr>
-                            <td colspan="5" class="py-12 text-center text-slate-400">
+                            <td colspan="6" class="py-12 text-center text-slate-400">
                                 <i class="fa-regular fa-folder-open text-2xl text-slate-300 mb-2 block"></i>
                                 <span>No leave records registered yet.</span>
                             </td>
@@ -369,6 +372,14 @@
                     const typeLabel = typeLabels[leave.leave_type] || leave.leave_type;
                     const typeColor = typeColors[leave.leave_type] || 'bg-slate-100 text-slate-600 border-slate-200';
 
+                    const statusColors = {
+                        Pending: 'bg-amber-50 text-amber-700 border-amber-200',
+                        Approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                        Rejected: 'bg-rose-50 text-rose-600 border-rose-200',
+                    };
+                    const status = leave.status || 'Pending';
+                    const statusChip = `<span class="px-2.5 py-1 text-xs font-bold rounded-lg border ${statusColors[status] || 'bg-slate-100 text-slate-600 border-slate-200'}">${status}</span>`;
+
                     let partialInfo = '';
                     if (leave.leave_type === 'partial') {
                         const label = leave.partial_label || 'Partial';
@@ -376,6 +387,21 @@
                     }
 
                     const empInitial = (leave.employee_name || 'E').charAt(0).toUpperCase();
+
+                    const actionButtons = status === 'Pending'
+                        ? `<div class="flex items-center justify-end space-x-2">
+                            <button onclick="updateLeaveStatus('${leave.id}', 'Approved')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/60 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1">
+                                <i class="fa-solid fa-check text-[10px]"></i>
+                                <span>Approve</span>
+                            </button>
+                            <button onclick="updateLeaveStatus('${leave.id}', 'Rejected')" class="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1">
+                                <i class="fa-solid fa-xmark text-[10px]"></i>
+                                <span>Reject</span>
+                            </button>
+                           </div>`
+                        : `<button onclick="deleteLeave('${leave.id}')" class="w-8 h-8 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 hover:border-rose-200 rounded-xl flex items-center justify-center transition shadow-2xs" title="Remove leave">
+                            <i class="fa-regular fa-trash-can text-xs"></i>
+                           </button>`;
 
                     return `
                         <tr class="hover:bg-slate-50/80 transition-colors">
@@ -398,14 +424,28 @@
                                 ${partialInfo}
                                 ${leave.notes ? `<p class="text-xs text-slate-400 italic font-medium mt-1">"${leave.notes}"</p>` : ''}
                             </td>
-                            <td class="py-3.5 px-6">
-                                <button onclick="deleteLeave('${leave.id}')" class="w-8 h-8 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 hover:border-rose-200 rounded-xl flex items-center justify-center transition shadow-2xs" title="Remove leave">
-                                    <i class="fa-regular fa-trash-can text-xs"></i>
-                                </button>
-                            </td>
+                            <td class="py-3.5 px-4">${statusChip}</td>
+                            <td class="py-3.5 px-6 text-right">${actionButtons}</td>
                         </tr>
                     `;
                 }).join('');
+            } catch (err) { console.error(err); }
+        }
+
+        async function updateLeaveStatus(leaveId, status) {
+            if (!confirm(`Are you sure you want to ${status.toLowerCase()} this leave request?`)) return;
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/leaves/${leaveId}/status`, {
+                    method: 'POST',
+                    body: JSON.stringify({ status }),
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showMessage(data.message || `Leave ${status}`, 'success');
+                    loadLeaves();
+                } else {
+                    alert(data.message || `Failed to ${status.toLowerCase()} leave request.`);
+                }
             } catch (err) { console.error(err); }
         }
 

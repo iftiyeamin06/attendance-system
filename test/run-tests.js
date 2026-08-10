@@ -212,6 +212,128 @@ async function runTests() {
   test('duration 23:00 to 01:00 = 2h',
     nightDur === '2h 0m', `Got: ${nightDur}`);
 
+  console.log('\n11. Leave Request Workflow');
+  const { Leave } = require('../models');
+  const { Op } = require('sequelize');
+
+  const now = new Date();
+  const cy = now.getFullYear();
+  const cm = now.getMonth();
+
+  let chosenDate = null;
+  let dateStr = '';
+  for (let d = new Date(cy, cm, 1); d.getMonth() === cm; d.setDate(d.getDate() + 1)) {
+    if (d.getDay() === 0 || d.getDay() === 6) continue;
+    const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const overlap = await Leave.findAll({
+      where: {
+        userId: employee.id,
+        status: { [Op.ne]: 'Rejected' },
+        [Op.or]: [{ startDate: { [Op.lte]: ds } }, { endDate: { [Op.gte]: ds } }],
+      },
+    });
+    if (overlap.length === 0) {
+      chosenDate = d;
+      dateStr = ds;
+      break;
+    }
+  }
+  test('Found a leave-free weekday in current month', !!chosenDate, dateStr || 'none available');
+
+  const invalidStatus = await request(
+    'POST',
+    `/api/admin/leaves/${'00000000-0000-0000-0000-000000000000'}/status`,
+    { status: 'Weird' },
+    { Authorization: `Bearer ${adminToken}` }
+  );
+  test('Invalid status rejected with 400', invalidStatus.status === 400,
+    `Status: ${invalidStatus.status}, Message: ${invalidStatus.body.message}`);
+
+  const leaveSubmit = await request('POST', '/api/leaves', {
+    start_date: dateStr,
+    end_date: dateStr,
+    leave_type: 'sick',
+    notes: 'Automated leave request test',
+  }, { Authorization: `Bearer ${token}` });
+  test('Employee submits leave request',
+    leaveSubmit.status === 201 && leaveSubmit.body.data?.status === 'Pending',
+    `Status: ${leaveSubmit.status}, Data: ${JSON.stringify(leaveSubmit.body.data)}`);
+  const leaveId = leaveSubmit.body.data?.id;
+
+  const myLeaves = await request('GET', '/api/leaves', null, { Authorization: `Bearer ${token}` });
+  const myPending = myLeaves.body.data?.find(l => l.id === leaveId);
+  test('Employee sees own Pending request',
+    !!myPending && myPending.status === 'Pending',
+    JSON.stringify(myPending));
+
+  const adminLeaves = await request('GET', '/api/admin/leaves', null, { Authorization: `Bearer ${adminToken}` });
+  const adminPending = adminLeaves.body.data?.find(l => l.id === leaveId);
+  test('Admin sees Pending request',
+    !!adminPending && adminPending.status === 'Pending',
+    JSON.stringify(adminPending));
+
+  const summaryBefore = await request(
+    'GET',
+    `/api/admin/employee/${employee.id}/summary?month=${cm + 1}&year=${cy}`,
+    null,
+    { Authorization: `Bearer ${adminToken}` }
+  );
+  const dayBefore = summaryBefore.body.data?.daily_breakdown?.find(d => d.date === dateStr);
+  test('Pending leave NOT counted as ON_LEAVE',
+    summaryBefore.status === 200 && (!dayBefore || dayBefore.status !== 'ON_LEAVE'),
+    `Summary status: ${summaryBefore.status}, Day: ${JSON.stringify(dayBefore)}`);
+
+  const employeeApprove = await request(
+    'POST',
+    `/api/admin/leaves/${leaveId}/status`,
+    { status: 'Approved' },
+    { Authorization: `Bearer ${token}` }
+  );
+  test('Employee cannot approve own leave', employeeApprove.status === 403,
+    `Status: ${employeeApprove.status}, Message: ${employeeApprove.body.message}`);
+
+  const approve = await request(
+    'POST',
+    `/api/admin/leaves/${leaveId}/status`,
+    { status: 'Approved' },
+    { Authorization: `Bearer ${adminToken}` }
+  );
+  test('Admin approves leave', approve.status === 200 && approve.body.data?.status === 'Approved',
+    `Status: ${approve.status}, Data: ${JSON.stringify(approve.body.data)}`);
+
+  const myLeaves2 = await request('GET', '/api/leaves', null, { Authorization: `Bearer ${token}` });
+  const myApproved = myLeaves2.body.data?.find(l => l.id === leaveId);
+  test('Employee sees request as Approved',
+    !!myApproved && myApproved.status === 'Approved',
+    JSON.stringify(myApproved));
+
+  const summaryAfter = await request(
+    'GET',
+    `/api/admin/employee/${employee.id}/summary?month=${cm + 1}&year=${cy}`,
+    null,
+    { Authorization: `Bearer ${adminToken}` }
+  );
+  const dayAfter = summaryAfter.body.data?.daily_breakdown?.find(d => d.date === dateStr);
+  test('Approved leave shown as ON_LEAVE in report',
+    summaryAfter.status === 200 && !!dayAfter && dayAfter.status === 'ON_LEAVE',
+    `Summary status: ${summaryAfter.status}, Day: ${JSON.stringify(dayAfter)}`);
+
+  const allSummary = await request(
+    'GET',
+    `/api/admin/report/summary?month=${cm + 1}&year=${cy}`,
+    null,
+    { Authorization: `Bearer ${adminToken}` }
+  );
+  const empRow = allSummary.body.data?.employees?.find(e => e.id === employee.id);
+  test('All-employees report reflects approved leave',
+    allSummary.status === 200 && (empRow?.leave_days || 0) >= 1,
+    JSON.stringify(empRow));
+
+  const delLeave = await request('DELETE', `/api/admin/leaves/${leaveId}`, null, {
+    Authorization: `Bearer ${adminToken}`,
+  });
+  test('Cleanup: leave deleted', delLeave.status === 200, `Status: ${delLeave.status}`);
+
   console.log('\n--- Test Summary ---\n');
   const passed = results.filter((r) => r.status === 'PASS').length;
   const failed = results.filter((r) => r.status === 'FAIL').length;
