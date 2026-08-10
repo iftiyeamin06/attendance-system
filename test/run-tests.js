@@ -229,7 +229,8 @@ async function runTests() {
       where: {
         userId: employee.id,
         status: { [Op.ne]: 'Rejected' },
-        [Op.or]: [{ startDate: { [Op.lte]: ds } }, { endDate: { [Op.gte]: ds } }],
+        startDate: { [Op.lte]: ds },
+        endDate: { [Op.gte]: ds },
       },
     });
     if (overlap.length === 0) {

@@ -920,6 +920,9 @@ async function getAllEmployeesMonthlySummary(req, res) {
       let onLeaveCount = 0;
       let absentCount = 0;
       let partialLeaveCount = 0;
+      let sickLeaveDays = 0;
+      let paidLeaveDays = 0;
+      let unpaidLeaveDays = 0;
       let totalWorkMinutes = 0;
 
       for (let d = new Date(monthStart); d <= monthEnd; d.setDate(d.getDate() + 1)) {
@@ -939,6 +942,9 @@ async function getAllEmployeesMonthlySummary(req, res) {
         if (dayLeave) {
           onLeaveCount++;
           kpiTotalLeaves++;
+          if (dayLeave.leaveType === 'sick') sickLeaveDays++;
+          else if (dayLeave.leaveType === 'paid') paidLeaveDays++;
+          else if (dayLeave.leaveType === 'unpaid') unpaidLeaveDays++;
         } else if (dayLog) {
           const clockIn = new Date(dayLog.clockInTime);
           const clockOut = dayLog.clockOutTime;
@@ -983,6 +989,10 @@ async function getAllEmployeesMonthlySummary(req, res) {
         on_time_days: present,
         late_days: lateCount,
         leave_days: onLeaveCount + partialLeaveCount,
+        sick_leaves: sickLeaveDays,
+        paid_leaves: paidLeaveDays,
+        unpaid_leaves: unpaidLeaveDays,
+        partial_leaves: partialLeaveCount,
         absent_days: absentCount,
         total_workdays: totalWorkdays,
       };
@@ -1073,6 +1083,9 @@ async function exportMonthlyReportCsv(req, res) {
       let onLeaveCount = 0;
       let absentCount = 0;
       let partialLeaveCount = 0;
+      let sickLeaveDays = 0;
+      let paidLeaveDays = 0;
+      let unpaidLeaveDays = 0;
       let totalWorkMinutes = 0;
 
       for (let d = new Date(monthStart); d <= monthEnd; d.setDate(d.getDate() + 1)) {
@@ -1091,6 +1104,9 @@ async function exportMonthlyReportCsv(req, res) {
 
         if (dayLeave) {
           onLeaveCount++;
+          if (dayLeave.leaveType === 'sick') sickLeaveDays++;
+          else if (dayLeave.leaveType === 'paid') paidLeaveDays++;
+          else if (dayLeave.leaveType === 'unpaid') unpaidLeaveDays++;
         } else if (dayLog) {
           const clockIn = new Date(dayLog.clockInTime);
           const clockOut = dayLog.clockOutTime;
@@ -1128,12 +1144,16 @@ async function exportMonthlyReportCsv(req, res) {
         on_time_days: present,
         late_days: lateCount,
         leave_days: onLeaveCount + partialLeaveCount,
+        sick_leaves: sickLeaveDays,
+        paid_leaves: paidLeaveDays,
+        unpaid_leaves: unpaidLeaveDays,
+        partial_leaves: partialLeaveCount,
         absent_days: absentCount,
         total_workdays: totalWorkdays,
       };
     });
 
-    const fields = ['employee_name', 'employee_email', 'total_days_worked', 'total_hours_worked', 'on_time_days', 'late_days', 'leave_days', 'absent_days', 'total_workdays'];
+    const fields = ['employee_name', 'employee_email', 'total_days_worked', 'total_hours_worked', 'on_time_days', 'late_days', 'sick_leaves', 'paid_leaves', 'unpaid_leaves', 'partial_leaves', 'absent_days', 'total_workdays'];
     const parser = new Parser({ fields });
     const csv = parser.parse(csvData);
 

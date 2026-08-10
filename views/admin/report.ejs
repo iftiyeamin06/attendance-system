@@ -68,12 +68,16 @@
                             <th class="py-3.5 px-4 text-center">Hours</th>
                             <th class="py-3.5 px-4 text-center">On-Time</th>
                             <th class="py-3.5 px-4 text-center">Late</th>
+                            <th class="py-3.5 px-4 text-center" title="Sick leave days">Sick</th>
+                            <th class="py-3.5 px-4 text-center" title="Paid leave days">Paid</th>
+                            <th class="py-3.5 px-4 text-center" title="Unpaid leave days">Unpaid</th>
+                            <th class="py-3.5 px-4 text-center" title="Partial leave days">Partial</th>
                             <th class="py-3.5 px-4 text-center">Absent</th>
                         </tr>
                     </thead>
                     <tbody id="report-table" class="divide-y divide-slate-100">
                         <tr>
-                            <td colspan="6" class="py-12 text-center text-slate-400">
+                            <td colspan="10" class="py-12 text-center text-slate-400">
                                 <div class="inline-flex items-center space-x-2">
                                     <i class="fa-solid fa-circle-notch fa-spin text-indigo-500 text-base"></i>
                                     <span>Loading report...</span>
@@ -135,7 +139,7 @@
             if (!employees || employees.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="6" class="py-12 text-center text-slate-400">
+                        <td colspan="10" class="py-12 text-center text-slate-400">
                             <i class="fa-regular fa-folder-open text-2xl text-slate-300 mb-2 block"></i>
                             <span>No employees found for this period.</span>
                         </td>
@@ -176,6 +180,18 @@
                         </td>
                         <td class="py-3.5 px-4 text-center">
                             <span class="px-3 py-1 text-xs font-bold rounded-xl border bg-amber-50 text-amber-700 border-amber-200">${emp.late_days}</span>
+                        </td>
+                        <td class="py-3.5 px-4 text-center">
+                            <span class="px-3 py-1 text-xs font-bold rounded-xl border bg-rose-50 text-rose-600 border-rose-200">${emp.sick_leaves || 0}</span>
+                        </td>
+                        <td class="py-3.5 px-4 text-center">
+                            <span class="px-3 py-1 text-xs font-bold rounded-xl border bg-emerald-50 text-emerald-700 border-emerald-200">${emp.paid_leaves || 0}</span>
+                        </td>
+                        <td class="py-3.5 px-4 text-center">
+                            <span class="px-3 py-1 text-xs font-bold rounded-xl border bg-slate-100 text-slate-600 border-slate-200">${emp.unpaid_leaves || 0}</span>
+                        </td>
+                        <td class="py-3.5 px-4 text-center">
+                            <span class="px-3 py-1 text-xs font-bold rounded-xl border bg-purple-50 text-purple-700 border-purple-200">${emp.partial_leaves || 0}</span>
                         </td>
                         <td class="py-3.5 px-4 text-center">
                             <span class="px-3 py-1 text-xs font-bold rounded-xl border bg-rose-50 text-rose-700 border-rose-200">${emp.absent_days}</span>
