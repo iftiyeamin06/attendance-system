@@ -1,0 +1,161 @@
+<%- include('partials/layout-header') %>
+
+<div class="surface-card p-6 sm:p-8 relative overflow-hidden mb-6">
+  <div class="relative z-10">
+    <h1 class="text-2xl font-extrabold">Leave Request</h1>
+    <p class="text-sm text-slate-500">Submit a leave request and view past requests/status.</p>
+  </div>
+</div>
+
+<div class="max-w-3xl mx-auto">
+  <div class="surface-card p-6 mb-6">
+    <form id="leave-request-form" class="grid grid-cols-1 gap-4">
+      <div>
+        <label class="text-xs font-bold">Leave Type</label>
+        <select id="leave-type" class="w-full p-2 border rounded">
+          <option value="sick">Sick (Full Day)</option>
+          <option value="paid">Paid (Full Day)</option>
+          <option value="unpaid">Unpaid (Full Day)</option>
+          <option value="partial">Partial (Hourly)</option>
+        </select>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="text-xs font-bold">Start Date</label>
+          <input type="date" id="start-date" class="w-full p-2 border rounded" required />
+        </div>
+        <div>
+          <label class="text-xs font-bold">End Date</label>
+          <input type="date" id="end-date" class="w-full p-2 border rounded" required />
+        </div>
+      </div>
+
+      <div id="partial-fields" class="hidden grid grid-cols-2 gap-4">
+        <div>
+          <label class="text-xs font-bold">From (time)</label>
+          <input type="time" id="partial-from" class="w-full p-2 border rounded" />
+        </div>
+        <div>
+          <label class="text-xs font-bold">To (time)</label>
+          <input type="time" id="partial-to" class="w-full p-2 border rounded" />
+        </div>
+      </div>
+
+      <div>
+        <label class="text-xs font-bold">Reason / Notes</label>
+        <input type="text" id="notes" class="w-full p-2 border rounded" placeholder="Optional..." />
+      </div>
+
+      <div class="flex justify-end">
+        <button type="submit" class="btn-primary">Submit Request</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="surface-card p-6">
+    <h2 class="text-lg font-bold mb-3">Your Leave Requests</h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="text-xs text-slate-500 uppercase">
+          <tr>
+            <th class="py-2 px-3">Type</th>
+            <th class="py-2 px-3">Range</th>
+            <th class="py-2 px-3">Details</th>
+            <th class="py-2 px-3">Status</th>
+            <th class="py-2 px-3">Action</th>
+          </tr>
+        </thead>
+        <tbody id="my-leaves" class="divide-y">
+          <tr><td colspan="5" class="py-6 text-center text-slate-400">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<%- include('partials/layout-footer') %>
+
+<script>
+  const API_BASE = '/api';
+  const AUTH_TOKEN = '<%= token || "" %>';
+
+  async function fetchWithAuth(url, options = {}) {
+    options.headers = options.headers || {};
+    options.headers['Content-Type'] = 'application/json';
+    if (AUTH_TOKEN) options.headers['Authorization'] = `Bearer ${AUTH_TOKEN}`;
+    const res = await fetch(url, options);
+    return res;
+  }
+
+  function showPartialFields(show) {
+    document.getElementById('partial-fields').classList.toggle('hidden', !show);
+  }
+
+  document.getElementById('leave-type').addEventListener('change', (e) => {
+    showPartialFields(e.target.value === 'partial');
+  });
+
+  async function loadMyLeaves() {
+    const res = await fetchWithAuth(`${API_BASE}/leaves`);
+    const data = await res.json();
+    const tbody = document.getElementById('my-leaves');
+    tbody.innerHTML = '';
+    if (!data.success || !data.data || data.data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-slate-400">No requests yet.</td></tr>';
+      return;
+    }
+
+    data.data.forEach((l) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="py-3 px-3">${l.leave_type}</td>
+        <td class="py-3 px-3">${l.start_date} to ${l.end_date}</td>
+        <td class="py-3 px-3">${l.partial_label || l.notes || ''}</td>
+        <td class="py-3 px-3">${l.status || 'Pending'}</td>
+        <td class="py-3 px-3">${l.status === 'Pending' ? '<button class="btn-secondary btn-cancel" data-id="'+l.id+'">Cancel</button>' : ''}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    // attach cancel handlers
+    document.querySelectorAll('.btn-cancel').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const id = e.currentTarget.getAttribute('data-id');
+        if (!confirm('Cancel this leave request?')) return;
+        const res = await fetchWithAuth(`${API_BASE}/leaves/${id}`, { method: 'DELETE' });
+        const result = await res.json();
+        if (result.success) {
+          alert('Leave request cancelled.');
+          loadMyLeaves();
+        } else {
+          alert(result.message || 'Failed');
+        }
+      });
+    });
+  }
+
+  document.getElementById('leave-request-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const type = document.getElementById('leave-type').value;
+    const start = document.getElementById('start-date').value;
+    const end = document.getElementById('end-date').value;
+    const notes = document.getElementById('notes').value;
+    const body = { start_date: start, end_date: end, leave_type: type, notes };
+    if (type === 'partial') {
+      body.partial_from = document.getElementById('partial-from').value;
+      body.partial_to = document.getElementById('partial-to').value;
+    }
+
+    const res = await fetchWithAuth(`${API_BASE}/leaves`, { method: 'POST', body: JSON.stringify(body) });
+    const data = await res.json();
+    if (data.success) {
+      alert('Leave request submitted.');
+      loadMyLeaves();
+    } else {
+      alert(data.message || 'Failed');
+    }
+  });
+
+  loadMyLeaves();
+</script>

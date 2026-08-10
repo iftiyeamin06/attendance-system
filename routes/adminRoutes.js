@@ -27,5 +27,6 @@ router.get('/export', adminController.exportCsv);
 router.post('/leaves', leaveController.createLeave);
 router.delete('/leaves/:leaveId', leaveController.deleteLeave);
 router.get('/leaves', leaveController.getLeaves);
+router.post('/leaves/:id/status', leaveController.updateLeaveStatus);
 
 module.exports = router;

@@ -56,6 +56,12 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.TEXT,
         allowNull: true,
       },
+      status: {
+        type: DataTypes.ENUM('Pending', 'Approved', 'Rejected'),
+        allowNull: false,
+        defaultValue: 'Pending',
+        field: 'status',
+      },
       createdBy: {
         type: DataTypes.UUID,
         allowNull: false,

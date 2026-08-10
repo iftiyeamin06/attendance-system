@@ -640,7 +640,7 @@ async function getEmployeeMonthlySummary(req, res) {
     const monthStartStr = localDateStr(monthStart);
     const monthEndStr = localDateStr(monthEnd);
 
-    const officeTimes = await (require('./leaveController')).getOfficeTimes();
+    const officeTimes = await (require('./leaveController_fixed')).getOfficeTimes();
     const officeStartTime = officeTimes.start;
 
     const startSetting = await Setting.findOne({ where: { key: 'office_start_time' } });

@@ -1,7 +1,7 @@
 const { User, AttendanceLog, Setting, Leave } = require('../models');
 const cache = require('../redis/cache');
 const { extractClientIp } = require('../middleware/ipValidation');
-const { getOfficeTimes } = require('./leaveController');
+const { getOfficeTimes } = require('./leaveController_fixed');
 const { Op } = require('sequelize');
 const { localDateStr, computeShiftDate, deadlineEpoch } = require('../utils/date');
 
