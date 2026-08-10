@@ -422,6 +422,10 @@
                 });
                 const data = await response.json();
                 if (data.success) {
+                    const returnedUuid = data.data && data.data.device_id;
+                    if (returnedUuid) {
+                        localStorage.setItem('deviceId', returnedUuid);
+                    }
                     showMessage('Clock-in recorded successfully!', 'success');
                     renderTodayStatus();
                 } else {

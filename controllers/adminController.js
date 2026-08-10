@@ -125,12 +125,75 @@ async function bindDevice(req, res) {
     const { userId } = req.params;
     const { device_id } = req.body;
 
-    if (!device_id) {
-      return res.status(400).json({
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({
         success: false,
-        message: 'device_id is required.',
+        message: 'User not found.',
       });
     }
+
+    let deviceToBind = null;
+    let source = 'manual';
+
+    if (device_id && String(device_id).trim()) {
+      deviceToBind = String(device_id).trim();
+    } else {
+      const activeLog = await AttendanceLog.findOne({
+        where: {
+          userId: user.id,
+          status: 'VERIFIED',
+          clockOutTime: null,
+        },
+        order: [['clockInTime', 'DESC']],
+      });
+
+      if (activeLog && activeLog.deviceIdUsed) {
+        deviceToBind = activeLog.deviceIdUsed;
+        source = 'active_session';
+      }
+    }
+
+    if (!deviceToBind) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'No device to bind. Either provide a device_id, or use Reset & Allow Auto-Bind so the employee\u2019s next clock-in binds automatically.',
+        data: { source: null },
+      });
+    }
+
+    const previousDevice = user.boundDeviceId;
+    user.boundDeviceId = deviceToBind;
+    await user.save();
+
+    await cache.del(`bound_device:${user.id}`);
+    await cache.set(`bound_device:${user.id}`, deviceToBind, 86400);
+
+    return res.json({
+      success: true,
+      message:
+        source === 'active_session'
+          ? `Device bound from active session of ${user.name}.`
+          : `Device bound to ${user.name}.`,
+      data: {
+        previous_device_id: previousDevice,
+        bound_device_id: deviceToBind,
+        source,
+      },
+    });
+  } catch (err) {
+    console.error('Bind device error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'An error occurred while binding the device.',
+    });
+  }
+}
+
+async function getUserDeviceBinding(req, res) {
+  try {
+    const { userId } = req.params;
 
     const user = await User.findByPk(userId);
     if (!user) {
@@ -140,25 +203,35 @@ async function bindDevice(req, res) {
       });
     }
 
-    const previousDevice = user.boundDeviceId;
-    user.boundDeviceId = device_id;
-    await user.save();
+    const activeLog = await AttendanceLog.findOne({
+      where: {
+        userId: user.id,
+        status: 'VERIFIED',
+        clockOutTime: null,
+      },
+      order: [['clockInTime', 'DESC']],
+    });
 
-    await cache.set(`bound_device:${user.id}`, device_id, 86400);
+    const cachedBound = await cache.get(`bound_device:${user.id}`);
 
     return res.json({
       success: true,
-      message: `Device bound to ${user.name}.`,
       data: {
-        previous_device_id: previousDevice,
-        bound_device_id: device_id,
+        user_id: user.id,
+        name: user.name,
+        email: user.email,
+        bound_device_id: user.boundDeviceId || null,
+        cached_bound_device_id: cachedBound !== null ? cachedBound : null,
+        has_active_session: !!activeLog,
+        active_session_device_id: activeLog ? activeLog.deviceIdUsed || null : null,
+        active_session_clock_in_time: activeLog ? activeLog.clockInTime : null,
       },
     });
   } catch (err) {
-    console.error('Bind device error:', err);
+    console.error('Get user device binding error:', err);
     return res.status(500).json({
       success: false,
-      message: 'An error occurred while binding the device.',
+      message: 'An error occurred retrieving the device binding.',
     });
   }
 }
@@ -1077,6 +1150,7 @@ module.exports = {
   addEmployee,
   addAdmin,
   bindDevice,
+  getUserDeviceBinding,
   resetDevice,
   updateOfficeIp,
   updateOfficeTime,

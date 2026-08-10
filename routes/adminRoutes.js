@@ -15,6 +15,7 @@ router.post('/users', adminController.addEmployee);
 router.post('/admins', adminController.addAdmin);
 router.post('/users/:userId/reset-device', adminController.resetDevice);
 router.post('/users/:userId/bind-device', adminController.bindDevice);
+router.get('/users/:userId/device-binding', adminController.getUserDeviceBinding);
 router.delete('/users/:userId', adminController.deleteUser);
 router.get('/employee/:userId/summary', adminController.getEmployeeMonthlySummary);
 router.get('/report/summary', adminController.getAllEmployeesMonthlySummary);

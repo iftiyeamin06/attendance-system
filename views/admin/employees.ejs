@@ -163,6 +163,82 @@
             </div>
         </div>
 
+        <!-- Bind Device Modal -->
+        <div id="bind-device-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-md transition-opacity" onclick="closeBindModal()"></div>
+            <div class="relative w-full max-w-md bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 max-h-full">
+                <!-- Modal Header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center font-bold shadow-xs">
+                            <i class="fa-solid fa-mobile-screen text-base"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-base font-extrabold text-slate-900">Bind Device</h2>
+                            <p class="text-xs text-slate-400 font-medium">Link <span id="bind-employee-name" class="font-bold text-slate-600">Employee</span> to a device</p>
+                        </div>
+                    </div>
+                    <button onclick="closeBindModal()" class="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl flex items-center justify-center transition">
+                        <i class="fa-solid fa-xmark text-sm"></i>
+                    </button>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="flex-1 overflow-y-auto p-6 space-y-4">
+                    <div class="bg-slate-50 border border-slate-200/80 rounded-xl p-4 text-xs space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-400 font-semibold uppercase tracking-wider">Currently Bound</span>
+                            <span id="bind-current-device" class="font-mono font-bold text-sm text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">Loading...</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-400 font-semibold uppercase tracking-wider">Active Session Device</span>
+                            <span id="bind-active-device" class="text-sm text-slate-400 font-medium">Loading...</span>
+                        </div>
+                    </div>
+
+                    <!-- Option A -->
+                    <button id="bind-from-active-btn" onclick="bindFromActiveSession()"
+                        class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold px-4 py-3.5 rounded-xl text-sm transition shadow-sm flex items-center space-x-3">
+                        <div class="w-9 h-9 bg-white/15 rounded-lg flex items-center justify-center">
+                            <i class="fa-solid fa-link text-xs"></i>
+                        </div>
+                        <div class="text-left">
+                            <span class="block font-extrabold">Bind Active Session Device</span>
+                            <span class="block text-[11px] text-indigo-100 font-semibold">Locks the UUID currently in the active clock-in</span>
+                        </div>
+                    </button>
+
+                    <!-- Option B -->
+                    <button id="bind-reset-auto-btn" onclick="resetAndAllowAutoBind()"
+                        class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-bold px-4 py-3.5 rounded-xl text-sm transition flex items-center space-x-3">
+                        <div class="w-9 h-9 bg-white rounded-lg flex items-center justify-center text-slate-500 border border-slate-200">
+                            <i class="fa-solid fa-rotate-left text-xs"></i>
+                        </div>
+                        <div class="text-left">
+                            <span class="block font-extrabold">Reset & Allow Auto-Bind</span>
+                            <span class="block text-[11px] text-slate-400 font-semibold">Employee's next clock-in auto-locks their browser device</span>
+                        </div>
+                    </button>
+
+                    <div class="flex items-center space-x-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        <div class="h-px flex-1 bg-slate-200"></div>
+                        <span>Or Manually</span>
+                        <div class="h-px flex-1 bg-slate-200"></div>
+                    </div>
+
+                    <div class="flex space-x-2">
+                        <input type="text" id="bind-manual-device" placeholder="Enter device UUID..."
+                            class="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                        <button onclick="bindManualDevice()"
+                            class="bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition shadow-sm flex items-center space-x-1.5">
+                            <i class="fa-solid fa-link text-[10px]"></i>
+                            <span>Bind</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Users Management Table -->
         <div class="surface-card overflow-hidden mb-8">
             <div class="p-5 border-b border-slate-100 flex items-center justify-between flex-wrap gap-4 bg-slate-50/50">
@@ -380,7 +456,7 @@
                         <td class="py-3.5 px-6 text-right">
                             <div class="flex items-center justify-end space-x-2">
                                 ${emp.role !== 'admin' ? `
-                                <button onclick="bindDevicePrompt('${emp.id}')" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/60 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1">
+                                <button onclick="openBindModal('${emp.id}')" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/60 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1" title="Bind device from active session or reset for auto-bind">
                                     <i class="fa-solid fa-link text-[10px]"></i>
                                     <span>Bind</span>
                                 </button>
@@ -422,6 +498,116 @@
             }
         }
 
+        let bindUserId = null;
+
+        function openBindModal(userId) {
+            bindUserId = userId;
+            document.getElementById('bind-device-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            loadDeviceBindingInfo(userId);
+        }
+
+        function closeBindModal() {
+            document.getElementById('bind-device-modal').classList.add('hidden');
+            document.body.style.overflow = '';
+            bindUserId = null;
+        }
+
+        async function loadDeviceBindingInfo(userId) {
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/users/${userId}/device-binding`);
+                const data = await response.json();
+                if (!data.success) {
+                    throw new Error(data.message || 'Failed to load device info');
+                }
+
+                const d = data.data;
+                const empNameEl = document.getElementById('bind-employee-name');
+                const boundEl = document.getElementById('bind-current-device');
+                const activeEl = document.getElementById('bind-active-device');
+                const activeBtn = document.getElementById('bind-from-active-btn');
+                const autoBtn = document.getElementById('bind-reset-auto-btn');
+
+                empNameEl.textContent = d.name || 'Employee';
+                boundEl.textContent = d.bound_device_id
+                    ? `${d.bound_device_id.substring(0, 20)}...`
+                    : 'Not bound';
+                boundEl.className = 'font-mono font-bold text-sm ' + (d.bound_device_id ? 'text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md' : 'text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md');
+
+                if (d.has_active_session && d.active_session_device_id) {
+                    activeEl.textContent = `${d.active_session_device_id.substring(0, 20)}...`;
+                    activeEl.className = 'font-mono font-bold text-sm text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md';
+                    activeBtn.disabled = false;
+                    activeBtn.title = `Bind from active clock-in device (${d.active_session_device_id})`;
+                } else {
+                    activeEl.textContent = 'No active clock-in session';
+                    activeEl.className = 'text-sm text-slate-400 font-medium';
+                    activeBtn.disabled = true;
+                    activeBtn.title = 'Employee has no active clock-in session';
+                }
+
+                autoBtn.disabled = false;
+            } catch (err) {
+                console.error(err);
+                alert('Failed to load device binding info.');
+            }
+        }
+
+        async function bindFromActiveSession() {
+            if (!bindUserId) return;
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/users/${bindUserId}/bind-device`, {
+                    method: 'POST',
+                    body: JSON.stringify({}),
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showMessage(data.message || 'Device bound from active session', 'success');
+                    closeBindModal();
+                    loadEmployees();
+                } else {
+                    alert(data.message || 'Failed to bind device from active session.');
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        async function resetAndAllowAutoBind() {
+            if (!bindUserId) return;
+            if (!confirm('Reset the device binding? The employee\u2019s next clock-in will automatically bind their current browser device to their account.')) return;
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/users/${bindUserId}/reset-device`, { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('Device binding reset. Next clock-in will auto-bind.', 'success');
+                    closeBindModal();
+                    loadEmployees();
+                } else {
+                    alert(data.message || 'Failed to reset device binding.');
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        async function bindManualDevice() {
+            const input = document.getElementById('bind-manual-device');
+            const deviceId = input.value.trim();
+            if (!deviceId) { alert('Enter a device ID to bind.'); return; }
+            if (!bindUserId) return;
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/users/${bindUserId}/bind-device`, {
+                    method: 'POST',
+                    body: JSON.stringify({ device_id: deviceId }),
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('Device bound successfully', 'success');
+                    closeBindModal();
+                    loadEmployees();
+                } else {
+                    alert(data.message || 'Failed to bind device.');
+                }
+            } catch (err) { console.error(err); }
+        }
+
         async function resetDevice(userId) {
             if (!confirm('Are you sure you want to reset the device binding for this user?')) return;
             try {
@@ -430,24 +616,8 @@
                 if (data.success) {
                     showMessage('Device binding reset successfully', 'success');
                     loadEmployees();
-                }
-            } catch (err) { console.error(err); }
-        }
-
-        async function bindDevicePrompt(userId) {
-            const deviceId = prompt('Enter the device ID to bind:');
-            if (!deviceId) return;
-            try {
-                const response = await fetchWithAuth(`${API_BASE}/admin/users/${userId}/bind-device`, {
-                    method: 'POST',
-                    body: JSON.stringify({ device_id: deviceId }),
-                });
-                const data = await response.json();
-                if (data.success) {
-                    showMessage('Device bound successfully', 'success');
-                    loadEmployees();
                 } else {
-                    alert(data.message || 'Failed to bind device');
+                    showMessage(data.message || 'Failed to reset device binding', 'error');
                 }
             } catch (err) { console.error(err); }
         }
@@ -685,6 +855,7 @@
                 if (!document.getElementById('employee-modal').classList.contains('hidden')) closeModal();
                 if (!document.getElementById('add-employee-modal').classList.contains('hidden')) closeAddEmployeeModal();
                 if (!document.getElementById('add-admin-modal').classList.contains('hidden')) closeAddAdminModal();
+                if (!document.getElementById('bind-device-modal').classList.contains('hidden')) closeBindModal();
             }
         });
 
