@@ -35,22 +35,6 @@
             </div>
             <% } %>
 
-            <!-- Role Tabs -->
-            <div class="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-xl mb-6">
-                <button type="button" id="tab-employee" onclick="selectRole('employee')"
-                    class="flex items-center justify-center space-x-2 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all role-tab"
-                    style="background-color:#0f172a;color:#fff;">
-                    <i class="fa-solid fa-user"></i>
-                    <span>Employee Login</span>
-                </button>
-                <button type="button" id="tab-admin" onclick="selectRole('admin')"
-                    class="flex items-center justify-center space-x-2 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all role-tab"
-                    style="background-color:transparent;color:#64748b;">
-                    <i class="fa-solid fa-shield-halved"></i>
-                    <span>Admin Login</span>
-                </button>
-            </div>
-
             <!-- Unified Form -->
             <form action="/api/auth/login-web" method="POST" class="space-y-4">
                 <div>
@@ -84,64 +68,14 @@
 
                 <button type="submit"
                     class="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-3 rounded-xl shadow-sm transition-all duration-200 text-sm flex items-center justify-center space-x-2 mt-2 group">
-                    <span id="submit-label">Sign In to Dashboard</span>
+                    <span>Sign In</span>
                     <i class="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
                 </button>
             </form>
-
-            <!-- Quick Demo Creds Chip -->
-            <div class="mt-6 pt-6 border-t border-slate-100 text-center">
-                <button type="button" onclick="fillDemo()" class="inline-flex items-center space-x-2 bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 px-3.5 py-2 rounded-lg text-xs font-medium transition group">
-                    <i class="fa-solid fa-wand-magic-sparkles text-indigo-500"></i>
-                    <span id="demo-label">Fill Demo Credentials</span>
-                </button>
-            </div>
-        </div>
-
-        <!-- Tip Footer -->
-        <div class="text-center mt-6">
-            <p class="text-xs font-semibold text-slate-400 inline-flex items-center space-x-2">
-                <i class="fa-solid fa-circle-check text-emerald-500"></i>
-                <span>Use the same sign-in for both Employees and Admins — we'll route you automatically.</span>
-            </p>
         </div>
     </div>
 
     <script>
-        let currentRole = 'employee';
-
-        const DEMO = {
-            employee: ['employee@attendance.local', 'employee123'],
-            admin: ['admin@attendance.local', 'admin123'],
-        };
-
-        function selectRole(role) {
-            currentRole = role;
-            const employeeTab = document.getElementById('tab-employee');
-            const adminTab = document.getElementById('tab-admin');
-            const active = role === 'admin' ? adminTab : employeeTab;
-            const inactive = role === 'admin' ? employeeTab : adminTab;
-
-            active.style.backgroundColor = '#0f172a';
-            active.style.color = '#fff';
-            inactive.style.backgroundColor = 'transparent';
-            inactive.style.color = '#64748b';
-
-            document.getElementById('demo-label').textContent = role === 'admin' ? 'Fill Admin Credentials' : 'Fill Employee Credentials';
-            document.getElementById('submit-label').textContent = role === 'admin' ? 'Sign In to Admin Workspace' : 'Sign In to Dashboard';
-            document.getElementById('email-input').placeholder = role === 'admin' ? 'admin@company.com' : 'employee@company.com';
-            if (document.getElementById('email-input').value) {
-                document.getElementById('email-input').value = '';
-                document.getElementById('password-input').value = '';
-            }
-        }
-
-        function fillDemo() {
-            const [email, pwd] = DEMO[currentRole];
-            document.getElementById('email-input').value = email;
-            document.getElementById('password-input').value = pwd;
-        }
-
         function togglePasswordVisibility() {
             const pwdInput = document.getElementById('password-input');
             const eyeIcon = document.getElementById('eye-icon');
