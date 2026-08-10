@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= (typeof title !== 'undefined' && title) ? title : 'Employee Portal' %> - Attendance System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="bg-slate-50 text-slate-600 min-h-screen flex flex-col">
+    <!-- Glassmorphic Top Navbar -->
+    <nav class="sticky top-0 z-40 glass-nav">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
+            <!-- Brand Logo -->
+            <div class="flex items-center space-x-3">
+                <div class="w-9 h-9 bg-slate-900 rounded-xl flex items-center justify-center text-white">
+                    <i class="fa-solid fa-clock-rotate-left text-indigo-400 text-base"></i>
+                </div>
+                <div class="leading-tight">
+                    <span class="text-sm font-bold text-slate-900 tracking-tight">Attendance</span>
+                    <p class="text-[11px] text-slate-400 font-medium hidden sm:block">Employee Portal</p>
+                </div>
+            </div>
+
+            <!-- Profile & Actions -->
+            <div class="flex items-center space-x-3">
+                <div class="hidden md:flex items-center space-x-2 bg-white border border-slate-200 rounded-full py-1.5 pl-1.5 pr-3 shadow-sm">
+                    <div class="w-6 h-6 bg-slate-900 rounded-full flex items-center justify-center text-white text-[11px] font-bold">
+                        <%= (user && user.name) ? user.name.charAt(0).toUpperCase() : 'E' %>
+                    </div>
+                    <span class="text-xs font-semibold text-slate-700 hidden lg:inline"><%= (user && user.name) ? user.name : 'Employee' %></span>
+                </div>
+                <a href="/logout" class="text-xs font-semibold text-slate-500 hover:text-rose-600 bg-white border border-slate-200 hover:border-rose-200 px-3 py-2 rounded-lg transition shadow-sm flex items-center space-x-1.5">
+                    <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                    <span class="hidden sm:inline">Sign out</span>
+                </a>
+                <!-- Mobile hamburger -->
+                <button id="nav-toggle" class="lg:hidden text-slate-600 hover:text-slate-900 bg-white border border-slate-200 hover:border-slate-300 w-9 h-9 rounded-lg transition shadow-sm flex items-center justify-center">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Sub-Navigation Desktop -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-3 hidden lg:block">
+            <div class="flex items-center justify-between flex-wrap gap-3 bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm">
+                <div class="flex items-center space-x-1 overflow-x-auto w-full sm:w-auto py-0.5">
+                    <a href="/employee/dashboard" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 <%= page === 'dashboard' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80' %>">
+                        <i class="fa-solid fa-chart-pie text-sm"></i>
+                        <span>Dashboard</span>
+                    </a>
+                    <a href="/employee/leave" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 <%= page === 'leave' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80' %>">
+                        <i class="fa-solid fa-calendar-minus text-sm"></i>
+                        <span>Leave</span>
+                    </a>
+                    <a href="/employee/settings" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 <%= page === 'settings' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80' %>">
+                        <i class="fa-solid fa-sliders text-sm"></i>
+                        <span>Settings</span>
+                    </a>
+                </div>
+
+                <div class="hidden md:flex items-center space-x-2 px-3 py-1 bg-slate-50 rounded-lg text-slate-500 text-xs font-semibold">
+                    <span class="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
+                    <span>Clock Engine Online</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Menu -->
+        <div id="nav-mobile-menu" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-3 hidden lg:hidden">
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-1.5 space-y-1">
+                <a href="/employee/dashboard" class="flex items-center space-x-2 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 <%= page === 'dashboard' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80' %>">
+                    <i class="fa-solid fa-chart-pie text-sm"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="/employee/leave" class="flex items-center space-x-2 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 <%= page === 'leave' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80' %>">
+                    <i class="fa-solid fa-calendar-minus text-sm"></i>
+                    <span>Leave</span>
+                </a>
+                <a href="/employee/settings" class="flex items-center space-x-2 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 <%= page === 'settings' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80' %>">
+                    <i class="fa-solid fa-sliders text-sm"></i>
+                    <span>Settings</span>
+                </a>
+                <div class="border-t border-slate-100 mt-1 pt-1">
+                    <div class="flex items-center space-x-2 px-4 py-2 text-xs font-semibold text-slate-500">
+                        <div class="w-6 h-6 bg-slate-900 rounded-full flex items-center justify-center text-white text-[11px] font-bold">
+                            <%= (user && user.name) ? user.name.charAt(0).toUpperCase() : 'E' %>
+                        </div>
+                        <span><%= (user && user.name) ? user.name : 'Employee' %></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const toggle = document.getElementById('nav-toggle');
+            const menu = document.getElementById('nav-mobile-menu');
+            if (toggle && menu) {
+                toggle.addEventListener('click', function () {
+                    menu.classList.toggle('hidden');
+                    toggle.querySelector('i').classList.toggle('fa-bars');
+                    toggle.querySelector('i').classList.toggle('fa-xmark');
+                });
+            }
+        });
+    </script>

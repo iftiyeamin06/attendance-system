@@ -37,14 +37,210 @@
                 <a href="/logout" class="text-xs font-semibold text-slate-500 hover:text-rose-600 bg-white border border-slate-200 hover:border-rose-200 px-3 py-2 rounded-lg transition shadow-sm">
                     <i class="fa-solid fa-arrow-right-from-bracket"></i>
                 </a>
+
+                <!-- Notification Bell -->
+                <div class="relative">
+                    <button id="notif-bell" title="Pending leave notifications"
+                        class="relative w-9 h-9 bg-white text-slate-500 hover:text-amber-600 border border-slate-200 hover:border-amber-200 rounded-lg flex items-center justify-center transition shadow-sm">
+                        <i class="fa-regular fa-bell text-sm"></i>
+                        <span id="notif-badge" class="hidden absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-bold rounded-full items-center justify-center leading-none">0</span>
+                    </button>
+
+                    <div id="notif-dropdown" class="hidden absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden">
+                        <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-bold text-slate-900">Leave Requests</p>
+                                <p class="text-[11px] text-slate-400 font-medium">Awaiting your approval</p>
+                            </div>
+                            <span id="notif-count-chip" class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">0</span>
+                        </div>
+                        <div id="notif-list" class="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                            <div class="text-center py-8 text-slate-400 text-xs font-semibold">Loading notifications...</div>
+                        </div>
+                        <a href="/admin/leaves" class="block text-center py-2.5 text-xs font-bold text-indigo-600 hover:bg-indigo-50 border-t border-slate-100 transition">
+                            View all leave requests &rarr;
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Mobile hamburger -->
+                <button id="nav-toggle" class="lg:hidden text-slate-600 hover:text-slate-900 bg-white border border-slate-200 hover:border-slate-300 w-9 h-9 rounded-lg transition shadow-sm flex items-center justify-center">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
             </div>
         </div>
     </nav>
 
+    <!-- Mobile Sub-Navigation -->
+    <div id="nav-mobile-menu" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-3 hidden lg:hidden">
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-1.5 space-y-1">
+            <a href="/admin/dashboard" class="flex items-center space-x-2 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 <%= title === 'Dashboard' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80' %>">
+                <i class="fa-solid fa-chart-pie text-sm"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="/admin/employees" class="flex items-center space-x-2 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 <%= title === 'Employees' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80' %>">
+                <i class="fa-solid fa-users text-sm"></i>
+                <span>Employees</span>
+            </a>
+            <a href="/admin/leaves" class="flex items-center space-x-2 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 <%= title === 'Leaves' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80' %>">
+                <i class="fa-solid fa-calendar-minus text-sm"></i>
+                <span>Leaves</span>
+            </a>
+            <a href="/admin/report" class="flex items-center space-x-2 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 <%= title === 'Monthly Report' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80' %>">
+                <i class="fa-solid fa-chart-column text-sm"></i>
+                <span>Report</span>
+            </a>
+            <a href="/admin/settings" class="flex items-center space-x-2 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 <%= title === 'Settings' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80' %>">
+                <i class="fa-solid fa-sliders text-sm"></i>
+                <span>Settings</span>
+            </a>
+            <div class="border-t border-slate-100 mt-1 pt-1 flex items-center space-x-2 px-4 py-2 text-xs font-semibold text-slate-500">
+                <div class="w-6 h-6 bg-indigo-600 rounded-full flex items-center justify-center text-white text-[11px] font-bold">
+                    <%= (user && user.name) ? user.name.charAt(0).toUpperCase() : 'A' %>
+                </div>
+                <span><%= (user && user.name) ? user.name : 'Administrator' %></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const toggle = document.getElementById('nav-toggle');
+            const menu = document.getElementById('nav-mobile-menu');
+            if (toggle && menu) {
+                toggle.addEventListener('click', function () {
+                    menu.classList.toggle('hidden');
+                    toggle.querySelector('i').classList.toggle('fa-bars');
+                    toggle.querySelector('i').classList.toggle('fa-xmark');
+                });
+            }
+
+            initNotifications();
+        });
+
+        const NOTIF_POLL_MS = 30000;
+
+        function updateNotifBadge(count) {
+            const badge = document.getElementById('notif-badge');
+            if (count > 0) {
+                badge.textContent = count > 99 ? '99+' : count;
+                badge.classList.remove('hidden');
+                badge.classList.add('flex');
+            } else {
+                badge.classList.add('hidden');
+                badge.classList.remove('flex');
+            }
+        }
+
+        const notifTypeLabels = { sick: 'Sick', paid: 'Paid', unpaid: 'Unpaid', partial: 'Partial' };
+        const notifTypeColors = {
+            sick: 'bg-rose-50 text-rose-700',
+            paid: 'bg-blue-50 text-blue-700',
+            unpaid: 'bg-slate-100 text-slate-700',
+            partial: 'bg-purple-50 text-purple-700',
+        };
+
+        function notifTypeChip(type) {
+            const label = notifTypeLabels[type] || type;
+            const color = notifTypeColors[type] || 'bg-slate-100 text-slate-700';
+            return `<span class="px-2 py-0.5 text-[10px] font-bold rounded-md ${color}">${label}</span>`;
+        }
+
+        function renderNotifications(leaves) {
+            const container = document.getElementById('notif-list');
+            const chip = document.getElementById('notif-count-chip');
+            chip.textContent = leaves.length;
+
+            if (leaves.length === 0) {
+                container.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-8 text-slate-400">
+                        <i class="fa-regular fa-bell-slash text-2xl text-slate-300 mb-2"></i>
+                        <p class="text-xs font-semibold">No pending leave requests</p>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = leaves.map(l => {
+                const initial = (l.employee_name || 'E').charAt(0).toUpperCase();
+                const dateLabel = l.start_date === l.end_date ? l.start_date : `${l.start_date} &rarr; ${l.end_date}`;
+                const partialInfo = l.leave_type === 'partial' && l.partial_from && l.partial_to
+                    ? ` <span class="text-slate-400">(${l.partial_hours}h ${l.partial_from}-${l.partial_to})</span>` : '';
+                return `
+                <div class="flex items-start space-x-3 px-4 py-3 hover:bg-slate-50/80 transition">
+                    <div class="w-8 h-8 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-bold text-xs shrink-0">${initial}</div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-xs font-bold text-slate-900 truncate">${l.employee_name}</span>
+                            ${notifTypeChip(l.leave_type)}
+                        </div>
+                        <p class="text-[11px] text-slate-500 font-medium mt-0.5"><i class="fa-regular fa-calendar mr-1"></i>${dateLabel}${partialInfo}</p>
+                        ${l.notes ? `<p class="text-[11px] text-slate-400 italic mt-0.5 truncate">"${l.notes}"</p>` : ''}
+                        <div class="flex items-center space-x-2 mt-2">
+                            <button onclick="notifAction('${l.id}', 'Approved')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/60 px-2.5 py-1 rounded-lg text-[10px] font-bold transition flex items-center space-x-1">
+                                <i class="fa-solid fa-check text-[9px]"></i><span>Approve</span>
+                            </button>
+                            <button onclick="notifAction('${l.id}', 'Rejected')" class="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 px-2.5 py-1 rounded-lg text-[10px] font-bold transition flex items-center space-x-1">
+                                <i class="fa-solid fa-xmark text-[9px]"></i><span>Reject</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        async function loadNotifications() {
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/notifications/leaves`);
+                const data = await response.json();
+                if (!data.success) return;
+                const leaves = data.data || [];
+                updateNotifBadge(leaves.length);
+                renderNotifications(leaves);
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function notifAction(leaveId, status) {
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/leaves/${leaveId}/status`, {
+                    method: 'POST',
+                    body: JSON.stringify({ status }),
+                });
+                const data = await response.json();
+                if (data.success) {
+                    loadNotifications();
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function initNotifications() {
+            const bell = document.getElementById('notif-bell');
+            const dropdown = document.getElementById('notif-dropdown');
+            if (!bell || !dropdown) return;
+
+            bell.addEventListener('click', function (e) {
+                e.stopPropagation();
+                const isHidden = dropdown.classList.contains('hidden');
+                dropdown.classList.toggle('hidden');
+                if (isHidden) loadNotifications();
+            });
+
+            document.addEventListener('click', function (e) {
+                if (!dropdown.contains(e.target)) dropdown.classList.add('hidden');
+            });
+
+            loadNotifications();
+            setInterval(loadNotifications, NOTIF_POLL_MS);
+        }
+    </script>
+
     <!-- Main Container -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full">
         <!-- Sub-Navigation Pills -->
-        <div class="flex items-center justify-between flex-wrap gap-3 mb-6 bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm">
+        <div class="hidden lg:flex items-center justify-between flex-wrap gap-3 mb-6 bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm">
             <div class="flex items-center space-x-1 overflow-x-auto w-full sm:w-auto py-0.5">
                 <a href="/admin/dashboard" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 <%= title === 'Dashboard' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80' %>">
                     <i class="fa-solid fa-chart-pie text-sm"></i>

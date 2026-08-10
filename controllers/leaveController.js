@@ -302,6 +302,37 @@ async function getMyLeaveRequests(req, res) {
   }
 }
 
+async function getPendingLeaveNotifications(req, res) {
+  try {
+    const leaves = await Leave.findAll({
+      where: { status: 'Pending' },
+      include: [{ model: User, as: 'user', attributes: ['id', 'name', 'email'] }],
+      order: [['createdAt', 'ASC']],
+      limit: 15,
+    });
+
+    return res.json({
+      success: true,
+      data: leaves.map((l) => ({
+        id: l.id,
+        employee_name: l.user?.name || 'Unknown',
+        employee_email: l.user?.email || 'Unknown',
+        start_date: l.startDate,
+        end_date: l.endDate,
+        leave_type: l.leaveType,
+        partial_hours: l.partialHours,
+        partial_from: l.partialFrom,
+        partial_to: l.partialTo,
+        notes: l.notes,
+        status: l.status,
+      })),
+    });
+  } catch (err) {
+    console.error('Pending leave notifications error:', err);
+    return res.status(500).json({ success: false, message: 'An error occurred.' });
+  }
+}
+
 async function updateLeaveStatus(req, res) {
   try {
     const { leaveId } = req.params;
@@ -386,4 +417,4 @@ async function syncLeaveToAttendance(leave) {
   }
 }
 
-module.exports = { createLeave, deleteLeave, getLeaves, submitLeaveRequest, getMyLeaveRequests, updateLeaveStatus, syncLeaveToAttendance, detectPartialLeaveType, getOfficeTimes, timeToMinutes };
+module.exports = { createLeave, deleteLeave, getLeaves, submitLeaveRequest, getMyLeaveRequests, getPendingLeaveNotifications, updateLeaveStatus, syncLeaveToAttendance, detectPartialLeaveType, getOfficeTimes, timeToMinutes };

@@ -141,6 +141,7 @@ app.get('/employee/dashboard', requireWebAuth, async (req, res) => {
     user: req.session.user,
     token: req.session.token,
     deviceId: req.user?.boundDeviceId || req.session?.deviceId || '',
+    page: 'dashboard',
   });
 });
 
@@ -149,6 +150,7 @@ app.get('/employee/leave', requireWebAuth, async (req, res) => {
     user: req.session.user,
     token: req.session.token,
     title: 'Leave Requests',
+    page: 'leave',
   });
 });
 
@@ -156,6 +158,7 @@ app.get('/employee/settings', requireWebAuth, async (req, res) => {
   res.render('employee/settings', {
     user: req.session.user,
     token: req.session.token,
+    page: 'settings',
   });
 });
 

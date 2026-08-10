@@ -287,13 +287,14 @@
             return new Date(Number(parts.year), Number(parts.month) - 1, 1);
         }
 
-        async function loadDashboard() {
+        async function loadDashboard(bypassCache = false) {
             try {
                 const dateInput = document.getElementById('attendance-date');
                 const selectedDate = dateInput.value;
-                const url = selectedDate
-                    ? `${API_BASE}/admin/dashboard?date=${selectedDate}`
-                    : `${API_BASE}/admin/dashboard`;
+                const params = [];
+                if (selectedDate) params.push(`date=${selectedDate}`);
+                if (bypassCache) params.push('refresh=true');
+                const url = `${API_BASE}/admin/dashboard` + (params.length ? `?${params.join('&')}` : '');
 
                 const response = await fetchWithAuth(url);
                 const data = await response.json();
@@ -541,4 +542,13 @@
         document.getElementById('attendance-date').addEventListener('change', loadDashboard);
         document.getElementById('attendance-date').value = dhakaDateInputValue();
         loadDashboard();
+
+        const AUTO_REFRESH_MS = 30000;
+
+        async function refreshDashboard() {
+            await loadDashboard(true);
+            filterTable();
+        }
+
+        setInterval(refreshDashboard, AUTO_REFRESH_MS);
     </script>

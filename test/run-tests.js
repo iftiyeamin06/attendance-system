@@ -273,6 +273,16 @@ async function runTests() {
     !!adminPending && adminPending.status === 'Pending',
     JSON.stringify(adminPending));
 
+  const notifications = await request('GET', '/api/admin/notifications/leaves', null, { Authorization: `Bearer ${adminToken}` });
+  const notifPending = notifications.body.data?.find(l => l.id === leaveId);
+  test('Pending leave appears in admin notifications',
+    notifications.status === 200 && !!notifPending && notifPending.status === 'Pending',
+    `Status: ${notifications.status}, Found: ${!!notifPending}`);
+
+  const notifForbidden = await request('GET', '/api/admin/notifications/leaves', null, { Authorization: `Bearer ${token}` });
+  test('Employee cannot access admin notifications', notifForbidden.status === 403,
+    `Status: ${notifForbidden.status}`);
+
   const summaryBefore = await request(
     'GET',
     `/api/admin/employee/${employee.id}/summary?month=${cm + 1}&year=${cy}`,
@@ -301,6 +311,12 @@ async function runTests() {
   );
   test('Admin approves leave', approve.status === 200 && approve.body.data?.status === 'Approved',
     `Status: ${approve.status}, Data: ${JSON.stringify(approve.body.data)}`);
+
+  const notificationsAfter = await request('GET', '/api/admin/notifications/leaves', null, { Authorization: `Bearer ${adminToken}` });
+  const stillPending = notificationsAfter.body.data?.find(l => l.id === leaveId);
+  test('Approved leave removed from admin notifications',
+    notificationsAfter.status === 200 && !stillPending,
+    `Status: ${notificationsAfter.status}, Still listed: ${!!stillPending}`);
 
   const myLeaves2 = await request('GET', '/api/leaves', null, { Authorization: `Bearer ${token}` });
   const myApproved = myLeaves2.body.data?.find(l => l.id === leaveId);

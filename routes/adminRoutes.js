@@ -28,5 +28,6 @@ router.post('/leaves', leaveController.createLeave);
 router.post('/leaves/:leaveId/status', leaveController.updateLeaveStatus);
 router.delete('/leaves/:leaveId', leaveController.deleteLeave);
 router.get('/leaves', leaveController.getLeaves);
+router.get('/notifications/leaves', leaveController.getPendingLeaveNotifications);
 
 module.exports = router;

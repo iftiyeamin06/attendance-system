@@ -238,7 +238,7 @@ async function getUserDeviceBinding(req, res) {
 
 async function adminDashboard(req, res) {
   try {
-    const { date } = req.query;
+    const { date, refresh } = req.query;
     const today = new Date();
     const targetDate = date ? new Date(date) : today;
     const todayStr = localDateStr(targetDate);
@@ -248,7 +248,7 @@ async function adminDashboard(req, res) {
     dayEnd.setHours(23, 59, 59, 999);
 
     const cacheKey = `daily_summary:${todayStr}`;
-    let dailyLogs = await cache.get(cacheKey);
+    let dailyLogs = refresh === 'true' ? null : await cache.get(cacheKey);
 
     // Get office time settings
     const startSetting = await Setting.findOne({ where: { key: 'office_start_time' } });
