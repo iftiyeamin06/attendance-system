@@ -33,5 +33,8 @@ router.get('/notifications/leaves', leaveController.getPendingLeaveNotifications
 router.post('/attendance/punch', adminController.addManualPunch);
 router.put('/attendance/logs/:logId', adminController.editAttendanceLog);
 router.delete('/attendance/logs/:logId', adminController.deleteAttendanceLog);
+router.get('/holidays', adminController.getHolidays);
+router.post('/holidays', adminController.createHoliday);
+router.delete('/holidays/:holidayId', adminController.deleteHoliday);
 
 module.exports = router;

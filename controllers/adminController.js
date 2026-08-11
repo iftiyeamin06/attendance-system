@@ -1,4 +1,4 @@
-const { User, AttendanceLog, Setting, Leave, PasswordReset } = require('../models');
+const { User, AttendanceLog, Setting, Leave, PasswordReset, Holiday } = require('../models');
 const cache = require('../redis/cache');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
@@ -930,7 +930,12 @@ async function getEmployeeMonthlySummary(req, res) {
     const partialLeaves = leaves.filter(l => l.leaveType === 'partial');
     const fullDayLeaves = leaves.filter(l => l.leaveType !== 'partial');
 
-    const totalWorkdays = countWeekdays(monthStart, monthEnd);
+    const holidays = await Holiday.findAll({
+      where: { date: { [Op.gte]: monthStartStr, [Op.lte]: monthEndStr } },
+    });
+    const holidayDates = new Set(holidays.map(h => h.date));
+
+    const totalWorkdays = countWeekdays(monthStart, monthEnd, holidayDates);
 
     let present = 0;
     let late = 0;
@@ -947,6 +952,7 @@ async function getEmployeeMonthlySummary(req, res) {
       const dayOfWeek = d.getDay();
 
       if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+      if (holidayDates.has(dateStr)) continue;
 
       const dayLog = logs.find(l => {
         if (l.shiftDate) return l.shiftDate === dateStr;
@@ -1071,11 +1077,14 @@ async function getEmployeeMonthlySummary(req, res) {
   }
 }
 
-function countWeekdays(start, end) {
+function countWeekdays(start, end, holidayDates) {
   let count = 0;
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const day = d.getDay();
-    if (day !== 0 && day !== 6) count++;
+    if (day !== 0 && day !== 6) {
+      if (holidayDates && holidayDates.has(localDateStr(d))) continue;
+      count++;
+    }
   }
   return count;
 }
@@ -1175,7 +1184,12 @@ async function getAllEmployeesMonthlySummary(req, res) {
     const partialLeaves = leaves.filter(l => l.leaveType === 'partial');
     const fullDayLeaves = leaves.filter(l => l.leaveType !== 'partial');
 
-    const totalWorkdays = countWeekdays(monthStart, monthEnd);
+    const holidays = await Holiday.findAll({
+      where: { date: { [Op.gte]: monthStartStr, [Op.lte]: monthEndStr } },
+    });
+    const holidayDates = new Set(holidays.map(h => h.date));
+
+    const totalWorkdays = countWeekdays(monthStart, monthEnd, holidayDates);
 
     let kpiTotalShifts = 0;
     let kpiTotalOnTime = 0;
@@ -1201,6 +1215,7 @@ async function getAllEmployeesMonthlySummary(req, res) {
         const dateStr = localDateStr(d);
         const dayOfWeek = d.getDay();
         if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+        if (holidayDates.has(dateStr)) continue;
 
         const dayLog = empLogs.find(l => {
           if (l.shiftDate) return l.shiftDate === dateStr;
@@ -1349,9 +1364,15 @@ async function exportMonthlyReportCsv(req, res) {
       order: [['startDate', 'ASC']],
     });
 
-    const partialLeaves = leaves.filter(l => l.leaveType === 'partial');
+const partialLeaves = leaves.filter(l => l.leaveType === 'partial');
     const fullDayLeaves = leaves.filter(l => l.leaveType !== 'partial');
-    const totalWorkdays = countWeekdays(monthStart, monthEnd);
+
+    const holidays = await Holiday.findAll({
+      where: { date: { [Op.gte]: monthStartStr, [Op.lte]: monthEndStr } },
+    });
+    const holidayDates = new Set(holidays.map(h => h.date));
+
+    const totalWorkdays = countWeekdays(monthStart, monthEnd, holidayDates);
 
     const csvData = employees.map(emp => {
       const empLogs = logs.filter(l => l.userId === emp.id);
@@ -1372,6 +1393,7 @@ async function exportMonthlyReportCsv(req, res) {
         const dateStr = localDateStr(d);
         const dayOfWeek = d.getDay();
         if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+        if (holidayDates.has(dateStr)) continue;
 
         const dayLog = empLogs.find(l => {
           if (l.shiftDate) return l.shiftDate === dateStr;
@@ -1473,7 +1495,80 @@ module.exports = {
   editAttendanceLog,
   deleteAttendanceLog,
   resetUserPassword,
+  getHolidays,
+  createHoliday,
+  deleteHoliday,
 };
+
+async function getHolidays(req, res) {
+  try {
+    const holidays = await Holiday.findAll({
+      order: [['date', 'ASC']],
+    });
+    return res.json({
+      success: true,
+      data: holidays.map(h => ({
+        id: h.id,
+        date: h.date,
+        name: h.name,
+      })),
+    });
+  } catch (err) {
+    console.error('Get holidays error:', err);
+    return res.status(500).json({ success: false, message: 'An error occurred.' });
+  }
+}
+
+async function createHoliday(req, res) {
+  try {
+    const { date, name } = req.body || {};
+
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(String(date))) {
+      return res.status(400).json({ success: false, message: 'A valid holiday date (YYYY-MM-DD) is required.' });
+    }
+
+    const holidayName = name ? String(name).trim() : '';
+    if (!holidayName) {
+      return res.status(400).json({ success: false, message: 'A holiday name is required.' });
+    }
+
+    const existing = await Holiday.findOne({ where: { date } });
+    if (existing) {
+      existing.name = holidayName;
+      await existing.save();
+      return res.status(200).json({
+        success: true,
+        message: 'Holiday updated successfully.',
+        data: { id: existing.id, date: existing.date, name: existing.name },
+      });
+    }
+
+    const holiday = await Holiday.create({ date, name: holidayName });
+    return res.status(201).json({
+      success: true,
+      message: 'Holiday added successfully.',
+      data: { id: holiday.id, date: holiday.date, name: holiday.name },
+    });
+  } catch (err) {
+    console.error('Create holiday error:', err);
+    return res.status(500).json({ success: false, message: 'An error occurred.' });
+  }
+}
+
+async function deleteHoliday(req, res) {
+  try {
+    const { holidayId } = req.params;
+    const holiday = await Holiday.findByPk(holidayId);
+    if (!holiday) {
+      return res.status(404).json({ success: false, message: 'Holiday not found.' });
+    }
+    await holiday.destroy();
+    return res.status(200).json({ success: true, message: 'Holiday deleted successfully.' });
+  } catch (err) {
+    console.error('Delete holiday error:', err);
+    return res.status(500).json({ success: false, message: 'An error occurred.' });
+  }
+}
 
 async function resetUserPassword(req, res) {
   try {

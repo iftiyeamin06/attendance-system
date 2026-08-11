@@ -302,7 +302,22 @@
                         Approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
                         Rejected: 'bg-rose-50 text-rose-600 border-rose-200',
                     };
+                    const statusIcons = {
+                        Pending: 'fa-clock',
+                        Approved: 'fa-check',
+                        Rejected: 'fa-xmark',
+                    };
                     const status = leave.status || 'Pending';
+                    const statusChip = `<span class="inline-flex items-center space-x-1.5 px-2.5 py-1 text-xs font-bold rounded-lg border ${statusColors[status] || 'bg-slate-100 text-slate-600 border-slate-200'}">
+                        <i class="fa-solid ${statusIcons[status] || 'fa-circle-info'} text-[9px]"></i>
+                        <span>${status}</span>
+                    </span>`;
+                    const adminRemark = leave.admin_remarks
+                        ? `<p class="mt-1.5 flex items-start space-x-1.5 text-[11px] font-medium text-slate-500 max-w-xs">
+                            <i class="fa-solid fa-shield-halved text-slate-300 text-xs mt-0.5"></i>
+                            <span><span class="font-bold text-slate-600">Admin:</span> ${leave.admin_remarks}</span>
+                        </p>`
+                        : '';
                     const typeLabel = typeLabels[leave.leave_type] || leave.leave_type;
                     const typeColor = typeColors[leave.leave_type] || 'bg-slate-100 text-slate-600 border-slate-200';
 
@@ -322,7 +337,7 @@
                                 <i class="fa-regular fa-calendar mr-1 text-slate-400"></i>${formatDate(leave.start_date)} to ${formatDate(leave.end_date)}
                             </td>
                             <td class="py-3.5 px-4">${detail || '<span class="text-slate-300">—</span>'}</td>
-                            <td class="py-3.5 px-4"><span class="px-2.5 py-1 text-xs font-bold rounded-lg border ${statusColors[status] || 'bg-slate-100 text-slate-600 border-slate-200'}">${status}</span></td>
+                            <td class="py-3.5 px-4">${statusChip}${adminRemark}</td>
                             <td class="py-3.5 px-4 text-xs font-medium text-slate-400">${formatDateTime(leave.created_at)}</td>
                         </tr>
                     `;

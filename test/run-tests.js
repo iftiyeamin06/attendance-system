@@ -223,7 +223,7 @@ async function runTests() {
     nightDur === '2h 0m', `Got: ${nightDur}`);
 
   console.log('\n11. Leave Request Workflow');
-  const { Leave } = require('../models');
+  const { Leave, AttendanceLog } = require('../models');
   const { Op } = require('sequelize');
 
   const now = new Date();
@@ -589,6 +589,71 @@ async function runTests() {
     Authorization: `Bearer ${adminToken}`,
   });
   test('Cleanup: temp employee deleted', pwCleanup.status === 200, `Status: ${pwCleanup.status}`);
+
+  console.log('\n14. Holiday Calendar\n');
+  const holidayAdmin = { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` };
+  const todayStr = `${cy}-${String(cm + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+  let holidayDate = null;
+  let holidayDateStr = '';
+  for (let d = new Date(cy, cm, 1); d.getMonth() === cm; d.setDate(d.getDate() + 1)) {
+    if (d.getDay() === 0 || d.getDay() === 6) continue;
+    const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (ds === todayStr) continue;
+    const logOverlap = await AttendanceLog.findAll({ where: { userId: employee.id, shiftDate: ds } });
+    const leaveOverlap = await Leave.findAll({
+      where: {
+        userId: employee.id,
+        status: { [Op.ne]: 'Rejected' },
+        startDate: { [Op.lte]: ds },
+        endDate: { [Op.gte]: ds },
+      },
+    });
+    if (logOverlap.length === 0 && leaveOverlap.length === 0) {
+      holidayDate = d;
+      holidayDateStr = ds;
+      break;
+    }
+  }
+  test('Found a clean weekday for holiday test', !!holidayDate, holidayDateStr || 'none available');
+
+  const summaryUrl = `/api/admin/employee/${employee.id}/summary?month=${cm + 1}&year=${cy}`;
+  const holBefore = await request('GET', summaryUrl, null, { Authorization: `Bearer ${adminToken}` });
+  const holBaseWorkdays = holBefore.body.data.summary.total_workdays;
+  const holBaseAbsent = holBefore.body.data.summary.absent;
+  const hadInBreakdown = holBefore.body.data.daily_breakdown.some(d => d.date === holidayDateStr);
+  test('Holiday test date is a normal ABSENT workday before holiday', hadInBreakdown,
+    `date: ${holidayDateStr}, base_workdays: ${holBaseWorkdays}`);
+
+  const holAdd = await request('POST', '/api/admin/holidays', { date: holidayDateStr, name: 'Holiday Test Day' }, holidayAdmin);
+  test('Holiday created', holAdd.status === 201, `Status: ${holAdd.status}`);
+  const holidayId = holAdd.body.data?.id;
+
+  const holAfter = await request('GET', summaryUrl, null, { Authorization: `Bearer ${adminToken}` });
+  const holAfterDays = holAfter.body.data.summary.total_workdays;
+  const holStillInBreakdown = holAfter.body.data.daily_breakdown.some(d => d.date === holidayDateStr);
+  test('Holiday date removed from daily breakdown', !holStillInBreakdown,
+    `date: ${holidayDateStr}`);
+  test('Workday count reduced for the holiday', holAfterDays === holBaseWorkdays - 1,
+    `${holBaseWorkdays} -> ${holAfterDays}`);
+  test('Absent count reduced for the holiday', holAfter.body.data.summary.absent === holBaseAbsent - 1,
+    `${holBaseAbsent} -> ${holAfter.body.data.summary.absent}`);
+
+  const holList = await request('GET', '/api/admin/holidays', null, { Authorization: `Bearer ${adminToken}` });
+  test('Holiday listed in admin holidays', !!holList.body.data?.find(h => h.id === holidayId),
+    JSON.stringify(holList.body.data));
+
+  const holBad = await request('POST', '/api/admin/holidays', { date: 'bad-date', name: 'X' }, holidayAdmin);
+  test('Invalid holiday date rejected', holBad.status === 400, `Status: ${holBad.status}`);
+
+  if (holidayId) {
+    const holDel = await request('DELETE', `/api/admin/holidays/${holidayId}`, null, { Authorization: `Bearer ${adminToken}` });
+    test('Holiday deleted (cleanup)', holDel.status === 200, `Status: ${holDel.status}`);
+  }
+
+  const holRestored = await request('GET', summaryUrl, null, { Authorization: `Bearer ${adminToken}` });
+  test('Workdays restored after holiday removal', holRestored.body.data.summary.total_workdays === holBaseWorkdays,
+    `${holRestored.body.data.summary.total_workdays} == ${holBaseWorkdays}`);
 
   console.log('\n13b. Fixture Cleanup\n');
   if (officeIpBefore) {

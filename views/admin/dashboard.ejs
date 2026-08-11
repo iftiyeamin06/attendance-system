@@ -458,6 +458,10 @@
 
         async function submitAttendanceEdit(e) {
             e.preventDefault();
+
+            const submitBtn = document.getElementById('ed-submit-label');
+            if (submitBtn.disabled) return;
+
             const reason = document.getElementById('ed-reason').value.trim();
             const status = document.getElementById('ed-status').value;
             const clockIn = document.getElementById('ed-clock-in').value;
@@ -486,18 +490,32 @@
                 body = { clock_in: clockIn, clock_out: clockOut, status, reason };
             }
 
+            const buttonLabel = submitBtn.querySelector('span');
+            const originalLabel = buttonLabel.textContent;
+            submitBtn.disabled = true;
+            const processingLabel = buttonLabel.dataset.processingLabel || 'Processing...';
+            buttonLabel.textContent = processingLabel;
+
+            const resetSubmitBtn = () => {
+                submitBtn.disabled = false;
+                buttonLabel.textContent = buttonLabel.dataset.originalLabel || originalLabel;
+            };
+
             try {
                 const response = await fetchWithAuth(url, { method, body: JSON.stringify(body) });
                 const data = await response.json();
                 if (data.success) {
+                    resetSubmitBtn();
                     showMessage(data.message || 'Attendance record updated', 'success');
                     closeAttendanceEditModal();
                     loadDashboard(true);
                 } else {
+                    resetSubmitBtn();
                     showMessage(data.message || 'Failed to save attendance record', 'error');
                 }
             } catch (err) {
                 console.error(err);
+                resetSubmitBtn();
                 showMessage('Error saving attendance record', 'error');
             }
         }

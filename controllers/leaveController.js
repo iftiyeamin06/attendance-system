@@ -185,6 +185,7 @@ async function getLeaves(req, res) {
           partial_to: l.partialTo,
           partial_label: partialInfo?.label || null,
           notes: l.notes,
+          admin_remarks: l.adminRemarks,
           status: l.status || 'Pending',
         };
       }),
@@ -291,6 +292,7 @@ async function getMyLeaveRequests(req, res) {
           partial_to: l.partialTo,
           partial_label: partialInfo?.label || null,
           notes: l.notes,
+          admin_remarks: l.adminRemarks,
           status: l.status || 'Pending',
           created_at: l.createdAt,
         };
@@ -336,7 +338,7 @@ async function getPendingLeaveNotifications(req, res) {
 async function updateLeaveStatus(req, res) {
   try {
     const { leaveId } = req.params;
-    const { status } = req.body;
+    const { status, remark } = req.body;
 
     if (!['Approved', 'Rejected'].includes(status)) {
       return res.status(400).json({
@@ -352,6 +354,7 @@ async function updateLeaveStatus(req, res) {
 
     const previousStatus = leave.status;
     leave.status = status;
+    leave.adminRemarks = remark && String(remark).trim() ? String(remark).trim() : null;
     await leave.save();
 
     if (leave.leaveType !== 'partial') {

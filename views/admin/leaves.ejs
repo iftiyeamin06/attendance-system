@@ -121,6 +121,53 @@
             </div>
         </div>
 
+        <!-- Leave Decision Modal -->
+        <div id="decision-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-md transition-opacity" onclick="closeDecisionModal()"></div>
+            <div class="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
+                <!-- Modal Header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
+                    <div class="flex items-center space-x-3">
+                        <div id="decision-icon" class="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shadow-xs">
+                            <i class="fa-solid fa-check text-base"></i>
+                        </div>
+                        <div>
+                            <h2 id="decision-title" class="text-base font-extrabold text-slate-900">Approve Leave</h2>
+                            <p class="text-xs text-slate-400 font-medium" id="decision-subtitle">Leave request</p>
+                        </div>
+                    </div>
+                    <button onclick="closeDecisionModal()" class="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl flex items-center justify-center transition">
+                        <i class="fa-solid fa-xmark text-sm"></i>
+                    </button>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="p-6">
+                    <div class="bg-slate-50 border border-slate-200/80 rounded-xl p-4 mb-5 text-xs text-slate-500 font-medium">
+                        <span id="decision-employee" class="text-slate-800 font-bold"></span> &mdash;
+                        <span id="decision-range" class="text-slate-600"></span>
+                    </div>
+
+                    <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Optional Comment <span class="text-slate-400 font-medium normal-case">(shown to the employee)</span></label>
+                    <textarea id="decision-remark" rows="3" maxlength="500"
+                        class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+                        placeholder="e.g. Approved. Enjoy your leave."></textarea>
+
+                    <div class="pt-4 grid grid-cols-2 gap-3">
+                        <button type="button" onclick="closeDecisionModal()"
+                            class="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition">
+                            Cancel
+                        </button>
+                        <button type="button" id="decision-confirm-btn"
+                            class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition shadow-sm flex items-center justify-center space-x-2">
+                            <i class="fa-solid fa-check"></i>
+                            <span id="decision-confirm-label">Approve Leave</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- All Leaves Records -->
         <div class="surface-card overflow-hidden mb-8">
             <div class="px-6 py-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
@@ -294,11 +341,11 @@
 
                     const actionButtons = status === 'Pending'
                         ? `<div class="flex items-center justify-end space-x-2">
-                            <button onclick="updateLeaveStatus('${leave.id}', 'Approved')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/60 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1">
+                            <button onclick="openDecisionModal('${leave.id}', 'Approved', '${leave.employee_name}', '${leave.start_date} to ${leave.end_date}')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/60 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1">
                                 <i class="fa-solid fa-check text-[10px]"></i>
                                 <span>Approve</span>
                             </button>
-                            <button onclick="updateLeaveStatus('${leave.id}', 'Rejected')" class="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1">
+                            <button onclick="openDecisionModal('${leave.id}', 'Rejected', '${leave.employee_name}', '${leave.start_date} to ${leave.end_date}')" class="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1">
                                 <i class="fa-solid fa-xmark text-[10px]"></i>
                                 <span>Reject</span>
                             </button>
@@ -336,12 +383,37 @@
             } catch (err) { console.error(err); }
         }
 
-        async function updateLeaveStatus(leaveId, status) {
-            if (!confirm(`Are you sure you want to ${status.toLowerCase()} this leave request?`)) return;
+        let pendingDecision = null;
+
+        function openDecisionModal(leaveId, status, employeeName, range) {
+            pendingDecision = { leaveId, status };
+            const isApprove = status === 'Approved';
+            document.getElementById('decision-title').textContent = isApprove ? 'Approve Leave' : 'Reject Leave';
+            document.getElementById('decision-subtitle').textContent = isApprove ? 'Leave request approval' : 'Leave request rejection';
+            document.getElementById('decision-confirm-label').textContent = isApprove ? 'Approve Leave' : 'Reject Leave';
+            document.getElementById('decision-employee').textContent = employeeName || 'Unknown';
+            document.getElementById('decision-range').textContent = range || '';
+            document.getElementById('decision-remark').value = '';
+            document.getElementById('decision-icon').className = 'w-10 h-10 rounded-2xl flex items-center justify-center shadow-xs ' + (isApprove ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600');
+            document.getElementById('decision-icon').innerHTML = `<i class="fa-solid ${isApprove ? 'fa-check' : 'fa-xmark'} text-base"></i>`;
+            const btn = document.getElementById('decision-confirm-btn');
+            btn.className = 'text-white font-bold px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition shadow-sm flex items-center justify-center space-x-2 ' + (isApprove ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700');
+            document.getElementById('decision-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            document.getElementById('decision-remark').focus();
+        }
+
+        function closeDecisionModal() {
+            document.getElementById('decision-modal').classList.add('hidden');
+            document.body.style.overflow = '';
+            pendingDecision = null;
+        }
+
+        async function updateLeaveStatus(leaveId, status, remark) {
             try {
                 const response = await fetchWithAuth(`${API_BASE}/admin/leaves/${leaveId}/status`, {
                     method: 'POST',
-                    body: JSON.stringify({ status }),
+                    body: JSON.stringify({ status, remark }),
                 });
                 const data = await response.json();
                 if (data.success) {
@@ -352,6 +424,14 @@
                 }
             } catch (err) { console.error(err); }
         }
+
+        document.getElementById('decision-confirm-btn').addEventListener('click', () => {
+            if (!pendingDecision) return;
+            const remark = document.getElementById('decision-remark').value.trim();
+            const decision = pendingDecision;
+            closeDecisionModal();
+            updateLeaveStatus(decision.leaveId, decision.status, remark);
+        });
 
         async function deleteLeave(leaveId) {
             if (!confirm('Remove this leave entry?')) return;
@@ -399,6 +479,10 @@
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && !document.getElementById('leave-modal').classList.contains('hidden')) closeMarkLeaveModal();
+            if (e.key === 'Enter' && !document.getElementById('decision-modal').classList.contains('hidden') && e.target.id === 'decision-remark') {
+                document.getElementById('decision-confirm-btn').click();
+            }
+            if (e.key === 'Escape' && !document.getElementById('decision-modal').classList.contains('hidden')) closeDecisionModal();
         });
 
         populateEmployeeDropdown();
