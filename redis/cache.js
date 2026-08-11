@@ -91,6 +91,30 @@ const cache = {
     memoryCache.delete(key);
   },
 
+  async setnx(key, value, ttlSeconds = 5) {
+    if (redisAvailable) {
+      try {
+        const result = await redisClient.set(key, JSON.stringify(value), {
+          NX: true,
+          EX: ttlSeconds,
+        });
+        return result === 'OK';
+      } catch (err) {
+        return false;
+      }
+    }
+    const row = memoryCache.get(key);
+    if (row) {
+      try {
+        const parsed = JSON.parse(row);
+        if (parsed && parsed.__exp && parsed.__exp > Date.now()) return false;
+      } catch (err) {}
+    }
+    memoryCache.delete(key);
+    memoryCache.set(key, JSON.stringify({ __exp: Date.now() + ttlSeconds * 1000, v: value }));
+    return true;
+  },
+
   async getOfficeIP() {
     if (redisAvailable === null) {
       await cache.init();

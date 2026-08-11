@@ -181,6 +181,7 @@ async function bindDevice(req, res) {
 
     await cache.del(`bound_device:${user.id}`);
     await cache.set(`bound_device:${user.id}`, deviceToBind, 86400);
+    await cache.set(`revoke_trust:${user.id}`, Date.now(), 86400);
 
     return res.json({
       success: true,
@@ -454,6 +455,7 @@ async function resetDevice(req, res) {
     await user.save();
 
     await cache.del(`bound_device:${user.id}`);
+    await cache.set(`revoke_trust:${user.id}`, Date.now(), 86400);
 
     return res.json({
       success: true,
@@ -603,50 +605,71 @@ async function addManualPunch(req, res) {
       });
     }
 
-    const existing = await AttendanceLog.findOne({
-      where: { userId: user_id, shiftDate: shift_date },
-    });
+    const lockKey = `punch_lock:${user_id}:${shift_date}`;
+    let acquired = false;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      if (await cache.setnx(lockKey, 1, 5)) {
+        acquired = true;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 150));
+    }
 
-    const fields = {
-      clockInTime,
-      clockOutTime,
-      manualStatus,
-      editReason: String(reason).trim(),
-      editedBy: req.user.name || req.user.email || 'Admin',
-      editedAt: new Date(),
-    };
-
-    let log;
-    if (existing) {
-      existing.set(fields);
-      existing.status = manualStatus === 'ABSENT' ? 'ABSENT' : 'VERIFIED';
-      log = await existing.save();
-    } else {
-      log = await AttendanceLog.create({
-        userId: user_id,
-        shiftDate: shift_date,
-        ipAddress: 'MANUAL',
-        deviceIdUsed: 'MANUAL',
-        status: manualStatus === 'ABSENT' ? 'ABSENT' : 'VERIFIED',
-        isManual: true,
-        ...fields,
+    if (!acquired) {
+      return res.status(503).json({
+        success: false,
+        message: 'This record is being updated. Please try again.',
       });
     }
 
-    await cache.del(`daily_summary:${shift_date}`);
+    try {
+      const existing = await AttendanceLog.findOne({
+        where: { userId: user_id, shiftDate: shift_date },
+      });
 
-    return res.status(existing ? 200 : 201).json({
-      success: true,
-      message: existing ? 'Attendance record updated.' : 'Manual punch recorded.',
-      data: {
-        id: log.id,
-        user_id,
-        shift_date,
-        manual_status: log.manualStatus,
-        edit_reason: log.editReason,
-        edited_by: log.editedBy,
-      },
-    });
+      const fields = {
+        clockInTime,
+        clockOutTime,
+        manualStatus,
+        editReason: String(reason).trim(),
+        editedBy: req.user.name || req.user.email || 'Admin',
+        editedAt: new Date(),
+      };
+
+      let log;
+      if (existing) {
+        existing.set(fields);
+        existing.status = manualStatus === 'ABSENT' ? 'ABSENT' : 'VERIFIED';
+        log = await existing.save();
+      } else {
+        log = await AttendanceLog.create({
+          userId: user_id,
+          shiftDate: shift_date,
+          ipAddress: 'MANUAL',
+          deviceIdUsed: 'MANUAL',
+          status: manualStatus === 'ABSENT' ? 'ABSENT' : 'VERIFIED',
+          isManual: true,
+          ...fields,
+        });
+      }
+
+      await cache.del(`daily_summary:${shift_date}`);
+
+      return res.status(existing ? 200 : 201).json({
+        success: true,
+        message: existing ? 'Attendance record updated.' : 'Manual punch recorded.',
+        data: {
+          id: log.id,
+          user_id,
+          shift_date,
+          manual_status: log.manualStatus,
+          edit_reason: log.editReason,
+          edited_by: log.editedBy,
+        },
+      });
+    } finally {
+      await cache.del(lockKey);
+    }
   } catch (err) {
     console.error('Add manual punch error:', err);
     return res.status(500).json({

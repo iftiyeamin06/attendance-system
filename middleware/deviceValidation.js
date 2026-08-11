@@ -1,6 +1,18 @@
 const cache = require('../redis/cache');
 const { getTrustFromRequest, setTrustOnResponse } = require('./deviceTrust');
 
+const REVOKE_TTL = 86400;
+
+async function isTrustRevoked(userId, trust) {
+  const revokedAt = await cache.get(`revoke_trust:${userId}`);
+  if (!revokedAt) return false;
+  if (trust && trust.iat) {
+    const iatMs = new Date(trust.iat * 1000);
+    if (iatMs >= new Date(revokedAt)) return false;
+  }
+  return true;
+}
+
 async function deviceValidationMiddleware(req, res, next) {
   const deviceUuid = req.headers['x-device-uuid'];
 
@@ -17,8 +29,36 @@ async function deviceValidationMiddleware(req, res, next) {
   }
 
   const user = req.user;
+  const trust = getTrustFromRequest(req);
+  const trustActive = trust && !(await isTrustRevoked(user.id, trust));
+
+  if (trustActive && trust.sub !== user.id) {
+    return res.status(403).json({
+      success: false,
+      message: 'Device trust token is linked to a different account. Please log in and register your own device.',
+      error_code: 'DEVICE_TRUST_CROSS_ACCOUNT',
+    });
+  }
+
+  if (trustActive && trust.dev === deviceUuid) {
+    req.deviceValidationResult = {
+      valid: true,
+      trustLevel: 'trusted',
+      deviceId: deviceUuid,
+    };
+    return next();
+  }
 
   if (!user.boundDeviceId) {
+    const revoked = await cache.get(`revoke_trust:${user.id}`);
+    if (revoked) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your device was reset by an administrator. Please register your device again.',
+        error_code: 'DEVICE_TRUST_REVOKED',
+      });
+    }
+
     user.boundDeviceId = deviceUuid;
     await user.save();
     await cache.set(`bound_device:${user.id}`, deviceUuid, 86400);
@@ -42,49 +82,17 @@ async function deviceValidationMiddleware(req, res, next) {
     await cache.set(`bound_device:${user.id}`, boundDeviceId, 86400);
   }
 
-  const trust = getTrustFromRequest(req);
-
-  if (trust) {
-    if (trust.sub !== user.id) {
+  if (deviceUuid !== boundDeviceId) {
+    if (trustActive) {
       return res.status(403).json({
         success: false,
-        message: 'Device trust token is linked to a different account. Please log in and register your own device.',
-        error_code: 'DEVICE_TRUST_CROSS_ACCOUNT',
+        message: 'Device trust token does not match this device. Please re-register your device.',
+        error_code: 'DEVICE_TRUST_MISMATCH',
+        device_id: deviceUuid,
+        registered_device_id: boundDeviceId,
       });
     }
 
-    if (trust.dev === deviceUuid) {
-      req.deviceValidationResult = {
-        valid: true,
-        trustLevel: 'trusted',
-        deviceId: deviceUuid,
-        registeredDeviceId: boundDeviceId,
-      };
-      return next();
-    }
-
-    if (deviceUuid === boundDeviceId) {
-      setTrustOnResponse(res, user.id, deviceUuid);
-      req.deviceValidationResult = {
-        valid: true,
-        trustLevel: 'recovered',
-        reason: 'DEVICE_REBOUND_COOKIE_STALE',
-        deviceId: deviceUuid,
-        registeredDeviceId: boundDeviceId,
-      };
-      return next();
-    }
-
-    return res.status(403).json({
-      success: false,
-      message: 'Device trust token does not match this device. Please re-register your device.',
-      error_code: 'DEVICE_TRUST_MISMATCH',
-      device_id: deviceUuid,
-      registered_device_id: boundDeviceId,
-    });
-  }
-
-  if (deviceUuid !== boundDeviceId) {
     await cache.del(`bound_device:${user.id}`);
     req.deviceValidationResult = {
       valid: false,
@@ -98,6 +106,28 @@ async function deviceValidationMiddleware(req, res, next) {
         'Unregistered Device. You can only clock in from your registered smartphone.',
       error_code: 'UNREGISTERED_DEVICE',
     });
+  }
+
+  if (trustActive) {
+    if (trust.dev === deviceUuid) {
+      req.deviceValidationResult = {
+        valid: true,
+        trustLevel: 'trusted',
+        deviceId: deviceUuid,
+        registeredDeviceId: boundDeviceId,
+      };
+      return next();
+    }
+
+    setTrustOnResponse(res, user.id, deviceUuid);
+    req.deviceValidationResult = {
+      valid: true,
+      trustLevel: 'recovered',
+      reason: 'DEVICE_REBOUND_COOKIE_STALE',
+      deviceId: deviceUuid,
+      registeredDeviceId: boundDeviceId,
+    };
+    return next();
   }
 
   setTrustOnResponse(res, user.id, deviceUuid);

@@ -26,6 +26,7 @@ async function registerDevice(req, res) {
     await user.save();
 
     await cache.set(`bound_device:${user.id}`, device_uuid, 86400);
+    await cache.del(`revoke_trust:${user.id}`);
 
     setTrustOnResponse(res, user.id, device_uuid);
 

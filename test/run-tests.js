@@ -780,6 +780,108 @@ async function runTests() {
     ciWrongUuid.status === 403 && ciWrongUuid.body.error_code === 'UNREGISTERED_DEVICE',
     `Status: ${ciWrongUuid.status}, Code: ${ciWrongUuid.body.error_code}`);
 
+  console.log('\n17. Concurrency, Holiday/Leave Conflict & Device Reset\n');
+
+  const s17Reset = await request('POST', `/api/admin/users/${employee.id}/reset-device`, null, {
+    Authorization: `Bearer ${adminToken}`,
+  });
+  test('Reset: admin resets device', s17Reset.status === 200, `Status: ${s17Reset.status}`);
+
+  const s17Revoked = await request('POST', '/api/attendance/clock-in', null, {
+    Authorization: `Bearer ${token}`,
+    'X-Device-UUID': 'trust-dev-001',
+    Cookie: `device_trust=${recoverToken || ''}`,
+  });
+  test('Reset: old httpOnly trust cookie rejected on next request',
+    s17Revoked.status === 403 && s17Revoked.body.error_code === 'DEVICE_TRUST_REVOKED',
+    `Status: ${s17Revoked.status}, Code: ${s17Revoked.body.error_code}`);
+
+  const s17Reg = await request('POST', '/api/device/register', {
+    device_uuid: 'race-dev-01',
+  }, { Authorization: `Bearer ${token}` });
+  const s17CookieArr = Array.isArray(s17Reg.headers['set-cookie'])
+    ? s17Reg.headers['set-cookie'] : (s17Reg.headers['set-cookie'] ? [s17Reg.headers['set-cookie']] : []);
+  const s17CookieLine = s17CookieArr.find((c) => c.includes('device_trust=')) || '';
+  const s17Token = s17CookieLine.split(';')[0].replace('device_trust=', '');
+  test('Reset: re-registration mints a fresh cookie', s17Reg.status === 200 && !!s17Token,
+    `Status: ${s17Reg.status}, Cookie: ${!!s17Token}`);
+
+  const s17Base = {
+    Authorization: `Bearer ${token}`,
+    'X-Device-UUID': 'race-dev-01',
+    Cookie: `device_trust=${s17Token}`,
+  };
+  const s17Ci = await request('POST', '/api/attendance/clock-in', null, s17Base);
+  const s17Co = await request('POST', '/api/attendance/clock-out', null, s17Base);
+  test('Shift: clock-in/out keep the same log and stable shift_date',
+    s17Ci.status === 200 && s17Co.status === 200 &&
+    s17Co.body.data?.log_id === s17Ci.body.data?.log_id && !!s17Co.body.data?.shift_date,
+    `Ci: ${s17Ci.status}, Co: ${s17Co.status}, Same log: ${s17Co.body.data?.log_id === s17Ci.body.data?.log_id}`);
+
+  const s17Punch = {
+    user_id: employee.id,
+    shift_date: dateStr,
+    clock_in: '09:00',
+    clock_out: '17:00',
+    status: 'PRESENT',
+    reason: 'concurrent race test',
+  };
+  const raceReq = [
+    request('POST', '/api/admin/attendance/punch', s17Punch, { Authorization: `Bearer ${adminToken}` }),
+    request('POST', '/api/admin/attendance/punch', s17Punch, { Authorization: `Bearer ${adminToken}` }),
+    request('POST', '/api/admin/attendance/punch', s17Punch, { Authorization: `Bearer ${adminToken}` }),
+  ];
+  const raceRes = await Promise.all(raceReq);
+  const raceStatuses = raceRes.map((r) => r.status);
+  test('Race: 3 concurrent punches all accepted (201 create / 200 update)',
+    raceStatuses.every((s) => s === 200 || s === 201), `Statuses: ${raceStatuses.join(', ')}`);
+
+  const raceDash = await request('GET', `/api/admin/dashboard?date=${dateStr}&refresh=true`, null, {
+    Authorization: `Bearer ${adminToken}`,
+  });
+  const raceRows = (raceDash.body.data?.attendance_today || [])
+    .filter((l) => l.user && l.user.id === employee.id && l.shift_date === dateStr);
+  test('Race: EXACTLY ONE row after concurrent punches', raceRows.length === 1, `Rows: ${raceRows.length}`);
+
+  const hol17Before = await request('GET', summaryUrl, null, { Authorization: `Bearer ${adminToken}` });
+  const h17Workdays = hol17Before.body.data.summary.total_workdays;
+  const h17Present = hol17Before.body.data.summary.present;
+  const h17OnLeave = hol17Before.body.data.summary.on_leave;
+
+  const hol17Add = await request('POST', '/api/admin/holidays', { date: dateStr, name: 'Holiday/Leave Conflict' }, holidayAdmin);
+  const hol17Id = hol17Add.body.data?.id;
+  test('Conflict: holiday added on a punched workday', hol17Add.status === 201 && !!hol17Id, `Date: ${dateStr}`);
+
+  const lv17Add = await request('POST', '/api/admin/leaves', {
+    user_id: employee.id,
+    start_date: dateStr,
+    end_date: dateStr,
+    leave_type: 'paid',
+    notes: 'holiday conflict test',
+  }, { Authorization: `Bearer ${adminToken}` });
+  const lv17Id = lv17Add.body.data?.id;
+  await request('POST', `/api/admin/leaves/${lv17Id}/status`, {
+    status: 'Approved',
+  }, { Authorization: `Bearer ${adminToken}` });
+
+  const hol17After = await request('GET', summaryUrl, null, { Authorization: `Bearer ${adminToken}` });
+  const h17 = hol17After.body.data.summary;
+  test('Conflict: workdays drop by exactly 1 for the holiday',
+    h17.total_workdays === h17Workdays - 1, `${h17Workdays} -> ${h17.total_workdays}`);
+  test('Conflict: holiday+leave day not in breakdown',
+    !hol17After.body.data.daily_breakdown.some((d) => d.date === dateStr), `date: ${dateStr}`);
+  test('Conflict: leave on holiday NOT double-counted in on_leave',
+    h17.on_leave === h17OnLeave, `${h17OnLeave} -> ${h17.on_leave}`);
+  test('Conflict: previously-present holiday day removed from present exactly once (no double count)',
+    h17.present === h17Present - 1, `${h17Present} -> ${h17.present}`);
+
+  await request('DELETE', `/api/admin/leaves/${lv17Id}`, null, { Authorization: `Bearer ${adminToken}` });
+  await request('DELETE', `/api/admin/holidays/${hol17Id}`, null, { Authorization: `Bearer ${adminToken}` });
+  const hol17Restored = await request('GET', summaryUrl, null, { Authorization: `Bearer ${adminToken}` });
+  test('Conflict: workdays restored after cleanup',
+    hol17Restored.body.data.summary.total_workdays === h17Workdays,
+    `Status: ${hol17Restored.status}`);
+
   console.log('\n13b. Fixture Cleanup\n');
   if (officeIpBefore) {
     const ipRestore = await request(
