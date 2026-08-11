@@ -75,6 +75,7 @@ async function clockIn(req, res) {
         clock_in_time: log.clockInTime,
         ip_address: log.ipAddress,
         device_id: log.deviceIdUsed,
+        device_trust: req.deviceValidationResult?.trustLevel || 'trusted',
       },
     });
   } catch (err) {
@@ -142,6 +143,7 @@ async function clockOut(req, res) {
         shift_date: log.shiftDate,
         work_duration: calculateDuration(log.clockInTime, log.clockOutTime),
         total_worked: `${totalHours}h ${totalMins}m`,
+        device_trust: req.deviceValidationResult?.trustLevel || 'trusted',
       },
     });
   } catch (err) {

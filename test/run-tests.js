@@ -26,9 +26,9 @@ async function request(method, path, body = null, headers = {}) {
         res.on('end', () => {
           try {
             const parsed = chunks ? JSON.parse(chunks) : {};
-            resolve({ status: res.statusCode, body: parsed, raw: chunks });
+            resolve({ status: res.statusCode, body: parsed, raw: chunks, headers: res.headers });
           } catch (e) {
-            resolve({ status: res.statusCode, body: {}, raw: chunks });
+            resolve({ status: res.statusCode, body: {}, raw: chunks, headers: res.headers });
           }
         });
       }
@@ -654,6 +654,131 @@ async function runTests() {
   const holRestored = await request('GET', summaryUrl, null, { Authorization: `Bearer ${adminToken}` });
   test('Workdays restored after holiday removal', holRestored.body.data.summary.total_workdays === holBaseWorkdays,
     `${holRestored.body.data.summary.total_workdays} == ${holBaseWorkdays}`);
+
+  console.log('\n15. Audit Log\n');
+
+  const auditEmail = `audit.${Date.now()}@attendance.local`;
+  const auditCreate = await request('POST', '/api/admin/users', {
+    name: 'Audit Log Tester',
+    email: auditEmail,
+    password: 'auditpass123',
+  }, { Authorization: `Bearer ${adminToken}` });
+  const auditUserId = auditCreate.body.data?.id;
+  test('Audit: temp employee created', (auditCreate.status === 200 || auditCreate.status === 201) && !!auditUserId,
+    `Status: ${auditCreate.status}`);
+
+  const auditReset = await request('POST', `/api/admin/users/${auditUserId}/reset-password`, {
+    password: 'resetpass456',
+  }, { Authorization: `Bearer ${adminToken}` });
+  test('Audit: password reset performed (operation succeeds)', auditReset.status === 200,
+    `Status: ${auditReset.status}`);
+
+  const auditList = await request('GET', '/api/admin/audit-logs?limit=30', null, { Authorization: `Bearer ${adminToken}` });
+  test('Audit: logs endpoint returns data', auditList.status === 200 && Array.isArray(auditList.body.data),
+    `Status: ${auditList.status}, Entries: ${auditList.body.data?.length}`);
+
+  const auditEntries = auditList.body.data || [];
+  const auditResetEntry = auditEntries.find((l) => l.action.includes('reset-password'));
+  test('Audit: reset-password action logged', !!auditResetEntry, `Action: ${auditResetEntry?.action}`);
+  test('Audit: admin_id recorded', !!auditResetEntry && auditResetEntry.admin_id === adminId,
+    `Logged admin: ${auditResetEntry?.admin_id}`);
+
+  const auditDetailsStr = auditResetEntry ? JSON.stringify(auditResetEntry.details) : '';
+  test('Audit: password value never stored in details',
+    auditDetailsStr !== '' && !auditDetailsStr.includes('resetpass456') && !auditDetailsStr.includes('auditpass123'),
+    `Details leaked: ${auditDetailsStr.includes('resetpass456')}`);
+
+  const auditUserEntry = auditEntries.find((l) => l.action.includes('POST /api/admin/users'));
+  test('Audit: employee-creation action logged', !!auditUserEntry, `Action: ${auditUserEntry?.action}`);
+  test('Audit: target user captured on user operations',
+    auditUserEntry && (auditUserEntry.target_user_id === auditUserId || auditEntries.some((l) => l.target_user_id === auditUserId)),
+    `Expected: ${auditUserId}`);
+
+  const auditCleanup = await request('DELETE', `/api/admin/users/${auditUserId}`, null, {
+    Authorization: `Bearer ${adminToken}`,
+  });
+  test('Audit: temp employee cleaned up', auditCleanup.status === 200, `Status: ${auditCleanup.status}`);
+
+  console.log('\n16. Device Trust Token\n');
+
+  const ipForTrust = await request('POST', '/api/admin/settings/ip', {
+    office_public_ip: '127.0.0.1',
+  }, { Authorization: `Bearer ${adminToken}` });
+  test('Trust test: office IP set to localhost', ipForTrust.status === 200, `Status: ${ipForTrust.status}`);
+
+  const trReg = await request('POST', '/api/device/register', {
+    device_uuid: 'trust-dev-001',
+    device_info: 'trust test device',
+  }, { Authorization: `Bearer ${token}` });
+  const trustSetCookie = trReg.headers['set-cookie'];
+  const trustCookieArr = Array.isArray(trustSetCookie) ? trustSetCookie : (trustSetCookie ? [trustSetCookie] : []);
+  const trustCookieLine = trustCookieArr.find((c) => c.includes('device_trust=')) || '';
+  const trustToken = trustCookieLine.split(';')[0].replace('device_trust=', '');
+  test('Device trust: registration returns signed trust cookie',
+    trReg.status === 200 && !!trustToken,
+    `Status: ${trReg.status}, Cookie set: ${!!trustToken}`);
+  test('Device trust: cookie is HttpOnly + SameSite=Lax',
+    /HttpOnly/i.test(trustCookieLine) && /SameSite=Lax/i.test(trustCookieLine),
+    trustCookieLine);
+  test('Device trust: cookie is NOT readable via JSON body', !JSON.stringify(trReg.body).includes('device_trust'),
+    'Body exposes only bound_device_id/trust_level');
+
+  const ciTrusted = await request('POST', '/api/attendance/clock-in', null, {
+    Authorization: `Bearer ${token}`,
+    'X-Device-UUID': 'trust-dev-001',
+    Cookie: `device_trust=${trustToken}`,
+  });
+  test('Device trust: clock-in with valid signed cookie is TRUSTED',
+    ciTrusted.status === 200 && ciTrusted.body.data?.device_trust === 'trusted' && !!ciTrusted.body.data?.log_id,
+    `Status: ${ciTrusted.status}, Trust: ${ciTrusted.body.data?.device_trust}`);
+
+  const coTrusted = await request('POST', '/api/attendance/clock-out', null, {
+    Authorization: `Bearer ${token}`,
+    'X-Device-UUID': 'trust-dev-001',
+    Cookie: `device_trust=${trustToken}`,
+  });
+  test('Device trust: clock-out with valid signed cookie succeeds',
+    coTrusted.status === 200 && coTrusted.body.data?.device_trust === 'trusted',
+    `Status: ${coTrusted.status}`);
+
+  const ciMismatch = await request('POST', '/api/attendance/clock-in', null, {
+    Authorization: `Bearer ${token}`,
+    'X-Device-UUID': 'some-other-device',
+    Cookie: `device_trust=${trustToken}`,
+  });
+  test('Device trust: cookie bound to another device REJECTED',
+    ciMismatch.status === 403 && ciMismatch.body.error_code === 'DEVICE_TRUST_MISMATCH',
+    `Status: ${ciMismatch.status}, Code: ${ciMismatch.body.error_code}`);
+
+  const ciRecovery = await request('POST', '/api/attendance/clock-in', null, {
+    Authorization: `Bearer ${token}`,
+    'X-Device-UUID': 'trust-dev-001',
+    Cookie: 'device_trust=Fake.Signed.Token',
+  });
+  const recoverCookie = ciRecovery.headers['set-cookie'];
+  const recoverArr = Array.isArray(recoverCookie) ? recoverCookie : (recoverCookie ? [recoverCookie] : []);
+  const recoverLine = recoverArr.find((c) => c.includes('device_trust=')) || '';
+  test('Device trust: missing/invalid cookie uses office-IP recovery + re-mints cookie',
+    ciRecovery.status === 200 && ciRecovery.body.data?.device_trust === 'recovered' && /device_trust=/.test(recoverLine),
+    `Status: ${ciRecovery.status}, Trust: ${ciRecovery.body.data?.device_trust}, Remint: ${/device_trust=/.test(recoverLine)}`);
+
+  const recoverToken = recoverLine.split(';')[0].replace('device_trust=', '');
+  const coRecovered = await request('POST', '/api/attendance/clock-out', null, {
+    Authorization: `Bearer ${token}`,
+    'X-Device-UUID': 'trust-dev-001',
+    Cookie: `device_trust=${recoverToken}`,
+  });
+  test('Device trust: re-minted cookie works for clock-out (TRUSTED path)',
+    coRecovered.status === 200 && coRecovered.body.data?.device_trust === 'trusted',
+    `Status: ${coRecovered.status}`);
+
+  const ciWrongUuid = await request('POST', '/api/attendance/clock-in', null, {
+    Authorization: `Bearer ${token}`,
+    'X-Device-UUID': 'wrong-device',
+  });
+  test('Device trust: unregistered uuid without trust token stays blocked',
+    ciWrongUuid.status === 403 && ciWrongUuid.body.error_code === 'UNREGISTERED_DEVICE',
+    `Status: ${ciWrongUuid.status}, Code: ${ciWrongUuid.body.error_code}`);
 
   console.log('\n13b. Fixture Cleanup\n');
   if (officeIpBefore) {

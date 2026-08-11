@@ -3,11 +3,13 @@ const router = express.Router();
 
 const authMiddleware = require('../middleware/auth');
 const adminMiddleware = require('../middleware/admin');
+const auditMiddleware = require('../middleware/audit');
 const adminController = require('../controllers/adminController');
 const leaveController = require('../controllers/leaveController');
 
 router.use(authMiddleware);
 router.use(adminMiddleware);
+router.use(auditMiddleware);
 
 router.get('/dashboard', adminController.adminDashboard);
 router.get('/users', adminController.getAllUsers);
@@ -36,5 +38,6 @@ router.delete('/attendance/logs/:logId', adminController.deleteAttendanceLog);
 router.get('/holidays', adminController.getHolidays);
 router.post('/holidays', adminController.createHoliday);
 router.delete('/holidays/:holidayId', adminController.deleteHoliday);
+router.get('/audit-logs', adminController.getAuditLogs);
 
 module.exports = router;

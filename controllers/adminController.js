@@ -1,4 +1,4 @@
-const { User, AttendanceLog, Setting, Leave, PasswordReset, Holiday } = require('../models');
+const { User, AttendanceLog, Setting, Leave, PasswordReset, Holiday, AuditLog } = require('../models');
 const cache = require('../redis/cache');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
@@ -1498,7 +1498,51 @@ module.exports = {
   getHolidays,
   createHoliday,
   deleteHoliday,
+  getAuditLogs,
 };
+
+async function getAuditLogs(req, res) {
+  try {
+    const { limit } = req.query;
+    const max = Math.min(parseInt(limit) || 50, 200);
+
+    const logs = await AuditLog.findAll({
+      order: [['createdAt', 'DESC']],
+      limit: max,
+      include: [
+        {
+          model: User,
+          as: 'admin',
+          attributes: ['id', 'name', 'email'],
+          required: false,
+        },
+        {
+          model: User,
+          as: 'targetUser',
+          attributes: ['id', 'name', 'email'],
+          required: false,
+        },
+      ],
+    });
+
+    return res.json({
+      success: true,
+      data: logs.map((l) => ({
+        id: l.id,
+        admin_id: l.adminId,
+        admin: l.admin ? { id: l.admin.id, name: l.admin.name, email: l.admin.email } : null,
+        target_user_id: l.targetUserId,
+        target: l.targetUser ? { id: l.targetUser.id, name: l.targetUser.name, email: l.targetUser.email } : null,
+        action: l.action,
+        details: (() => { try { return JSON.parse(l.details); } catch { return l.details; } })(),
+        created_at: l.createdAt,
+      })),
+    });
+  } catch (err) {
+    console.error('Get audit logs error:', err);
+    return res.status(500).json({ success: false, message: 'An error occurred.' });
+  }
+}
 
 async function getHolidays(req, res) {
   try {

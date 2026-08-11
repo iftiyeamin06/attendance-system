@@ -1,5 +1,6 @@
 const { User } = require('../models');
 const cache = require('../redis/cache');
+const { setTrustOnResponse } = require('../middleware/deviceTrust');
 
 async function registerDevice(req, res) {
   try {
@@ -26,12 +27,15 @@ async function registerDevice(req, res) {
 
     await cache.set(`bound_device:${user.id}`, device_uuid, 86400);
 
+    setTrustOnResponse(res, user.id, device_uuid);
+
     return res.json({
       success: true,
       message: 'Device registered successfully.',
       data: {
         user_id: user.id,
         bound_device_id: device_uuid,
+        trust_level: 'trusted',
       },
     });
   } catch (err) {

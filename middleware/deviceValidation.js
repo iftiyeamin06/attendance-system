@@ -1,4 +1,5 @@
 const cache = require('../redis/cache');
+const { getTrustFromRequest, setTrustOnResponse } = require('./deviceTrust');
 
 async function deviceValidationMiddleware(req, res, next) {
   const deviceUuid = req.headers['x-device-uuid'];
@@ -21,10 +22,11 @@ async function deviceValidationMiddleware(req, res, next) {
     user.boundDeviceId = deviceUuid;
     await user.save();
     await cache.set(`bound_device:${user.id}`, deviceUuid, 86400);
+    setTrustOnResponse(res, user.id, deviceUuid);
 
     req.deviceValidationResult = {
       valid: true,
-      reason: 'AUTO_BOUND',
+      trustLevel: 'auto_bound',
       deviceId: deviceUuid,
     };
     return next();
@@ -38,6 +40,48 @@ async function deviceValidationMiddleware(req, res, next) {
   } else {
     boundDeviceId = user.boundDeviceId;
     await cache.set(`bound_device:${user.id}`, boundDeviceId, 86400);
+  }
+
+  const trust = getTrustFromRequest(req);
+
+  if (trust) {
+    if (trust.sub !== user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'Device trust token is linked to a different account. Please log in and register your own device.',
+        error_code: 'DEVICE_TRUST_CROSS_ACCOUNT',
+      });
+    }
+
+    if (trust.dev === deviceUuid) {
+      req.deviceValidationResult = {
+        valid: true,
+        trustLevel: 'trusted',
+        deviceId: deviceUuid,
+        registeredDeviceId: boundDeviceId,
+      };
+      return next();
+    }
+
+    if (deviceUuid === boundDeviceId) {
+      setTrustOnResponse(res, user.id, deviceUuid);
+      req.deviceValidationResult = {
+        valid: true,
+        trustLevel: 'recovered',
+        reason: 'DEVICE_REBOUND_COOKIE_STALE',
+        deviceId: deviceUuid,
+        registeredDeviceId: boundDeviceId,
+      };
+      return next();
+    }
+
+    return res.status(403).json({
+      success: false,
+      message: 'Device trust token does not match this device. Please re-register your device.',
+      error_code: 'DEVICE_TRUST_MISMATCH',
+      device_id: deviceUuid,
+      registered_device_id: boundDeviceId,
+    });
   }
 
   if (deviceUuid !== boundDeviceId) {
@@ -56,8 +100,11 @@ async function deviceValidationMiddleware(req, res, next) {
     });
   }
 
+  setTrustOnResponse(res, user.id, deviceUuid);
   req.deviceValidationResult = {
     valid: true,
+    trustLevel: 'recovered',
+    reason: 'TRUST_COOKIE_REISSUED',
     deviceId: deviceUuid,
     registeredDeviceId: boundDeviceId,
   };

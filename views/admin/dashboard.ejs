@@ -125,12 +125,11 @@
                             <th class="py-3 px-4">IP Address</th>
                             <th class="py-3 px-4">Device ID</th>
                             <th class="py-3 px-6">Status</th>
-                            <th class="py-3 px-6">Action</th>
                         </tr>
                     </thead>
                     <tbody id="attendance-table" class="divide-y divide-slate-100">
                         <tr>
-                            <td colspan="7" class="py-12 text-center text-slate-400 text-sm">
+                            <td colspan="6" class="py-12 text-center text-slate-400 text-sm">
                                 <div class="inline-flex items-center space-x-2">
                                     <i class="fa-solid fa-circle-notch fa-spin text-indigo-500 text-base"></i>
                                     <span>Loading attendance logs...</span>
@@ -552,7 +551,7 @@
                     currentLogs = [];
                     attendanceTable.innerHTML = `
                         <tr>
-                            <td colspan="7" class="py-12 text-center text-slate-400">
+                            <td colspan="6" class="py-12 text-center text-slate-400">
                                 <i class="fa-regular fa-folder-open text-2xl text-slate-300 mb-2 block"></i>
                                 <span>No attendance logs recorded for this date.</span>
                             </td>
@@ -600,12 +599,7 @@
 <td class="py-3.5 px-6">
                             <div class="flex items-center gap-1.5">${badgeHtml}${partialBadge}</div>
                         </td>
-                            <td class="py-3.5 px-6 text-right">
-                                <button onclick="openEditModal('${log.id}')" class="w-8 h-8 bg-white hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 border border-slate-200 hover:border-indigo-200 rounded-lg flex items-center justify-center transition shadow-2xs" title="Edit attendance record">
-                                    <i class="fa-solid fa-pen text-[11px]"></i>
-                                </button>
-                            </td>
-                        </tr>
+                            </tr>
                     `}).join('');
                 }
 
