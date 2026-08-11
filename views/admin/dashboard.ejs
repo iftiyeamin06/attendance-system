@@ -94,6 +94,12 @@
                 </div>
 
                 <div class="flex items-center space-x-3 w-full sm:w-auto">
+                    <button onclick="openManualPunchModal()"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3.5 py-2 rounded-lg text-xs transition shadow-sm flex items-center space-x-1.5">
+                        <i class="fa-solid fa-plus text-[10px]"></i>
+                        <span>Manual Punch</span>
+                    </button>
+
                     <!-- Quick Search Input -->
                     <div class="relative w-full sm:w-48">
                         <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
@@ -119,11 +125,12 @@
                             <th class="py-3 px-4">IP Address</th>
                             <th class="py-3 px-4">Device ID</th>
                             <th class="py-3 px-6">Status</th>
+                            <th class="py-3 px-6">Action</th>
                         </tr>
                     </thead>
                     <tbody id="attendance-table" class="divide-y divide-slate-100">
                         <tr>
-                            <td colspan="6" class="py-12 text-center text-slate-400 text-sm">
+                            <td colspan="7" class="py-12 text-center text-slate-400 text-sm">
                                 <div class="inline-flex items-center space-x-2">
                                     <i class="fa-solid fa-circle-notch fa-spin text-indigo-500 text-base"></i>
                                     <span>Loading attendance logs...</span>
@@ -132,6 +139,103 @@
                         </tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- Edit Attendance / Manual Punch Modal -->
+        <div id="attendance-edit-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-md transition-opacity" onclick="closeAttendanceEditModal()"></div>
+            <div class="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 max-h-full">
+                <!-- Modal Header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center font-bold shadow-xs">
+                            <i class="fa-solid fa-pen-to-square text-base"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-base font-extrabold text-slate-900" id="ed-modal-title">Edit Attendance</h2>
+                            <p class="text-xs text-slate-400 font-medium">Adjust times or status — every change is logged</p>
+                        </div>
+                    </div>
+                    <button onclick="closeAttendanceEditModal()" class="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl flex items-center justify-center transition">
+                        <i class="fa-solid fa-xmark text-sm"></i>
+                    </button>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="flex-1 overflow-y-auto p-6">
+                    <form id="attendance-edit-form" class="space-y-4">
+                        <div id="ed-employee-field">
+                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Employee</label>
+                            <select id="ed-employee" required
+                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                            </select>
+                        </div>
+
+                        <div id="ed-employee-display" class="hidden">
+                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Employee</label>
+                            <div class="flex items-center space-x-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5">
+                                <div class="w-8 h-8 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-bold text-xs">E</div>
+                                <span class="text-sm font-bold text-slate-900" id="ed-employee-name">—</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Shift Date</label>
+                            <input type="date" id="ed-date" required
+                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Clock In</label>
+                                <input type="time" id="ed-clock-in"
+                                    class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                            </div>
+                            <div>
+                                <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Clock Out</label>
+                                <input type="time" id="ed-clock-out"
+                                    class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Status</label>
+                            <select id="ed-status" required
+                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                                <option value="PRESENT">PRESENT</option>
+                                <option value="LATE">LATE</option>
+                                <option value="ABSENT">ABSENT</option>
+                                <option value="AUTO">Automatic (derive from clock times)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">
+                                Reason for Change <span class="text-rose-500">*</span>
+                            </label>
+                            <textarea id="ed-reason" rows="3" required
+                                class="w-full px-4 py-2.5 bg-rose-50/40 border border-rose-200 rounded-xl text-sm focus:outline-none focus:border-rose-400 focus:bg-white transition resize-none"
+                                placeholder="Explain why this attendance record is being added or changed..."></textarea>
+                            <p class="text-[11px] text-slate-400 font-medium mt-1.5 flex items-center space-x-1.5">
+                                <i class="fa-solid fa-circle-info"></i>
+                                <span>Required — recorded with your name and timestamp for accountability.</span>
+                            </p>
+                        </div>
+
+                        <div class="pt-2 grid grid-cols-2 gap-3">
+                            <button type="button" onclick="closeAttendanceEditModal()"
+                                class="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition">
+                                Cancel
+                            </button>
+                            <button type="submit" id="ed-submit-label"
+                                class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition shadow-sm flex items-center justify-center space-x-2">
+                                <i class="fa-solid fa-check"></i>
+                                <span>Save Changes</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
 
@@ -240,6 +344,10 @@
     <script>
         let currentEmployeeId = null;
         let allEmployeeIds = {};
+        let currentLogs = [];
+        let currentEmployees = [];
+        let attendanceEditMode = null;
+        let attendanceEditLogId = null;
         const DAKHA_TIME_ZONE = 'Asia/Dhaka';
 
         function dhakaDateParts(date = new Date()) {
@@ -282,6 +390,118 @@
             return `${parts.year}-${parts.month}-${parts.day}`;
         }
 
+        function toTimeInputValue(iso) {
+            if (!iso) return '';
+            const parts = new Intl.DateTimeFormat('en-US', {
+                timeZone: DAKHA_TIME_ZONE,
+                hour: '2-digit',
+                minute: '2-digit',
+                hourCycle: 'h23',
+            }).formatToParts(new Date(iso));
+            let h = '', m = '';
+            for (const p of parts) {
+                if (p.type === 'hour') h = p.value;
+                if (p.type === 'minute') m = p.value;
+            }
+            return `${h}:${m}`;
+        }
+
+        function populateEmployeeSelect() {
+            const select = document.getElementById('ed-employee');
+            select.innerHTML = currentEmployees.length
+                ? currentEmployees.map(e => `<option value="${e.id}">${e.name}</option>`).join('')
+                : '<option value="">No employees available</option>';
+        }
+
+        function openManualPunchModal() {
+            attendanceEditMode = 'create';
+            attendanceEditLogId = null;
+            document.getElementById('ed-modal-title').textContent = 'Add Manual Punch';
+            document.getElementById('ed-submit-label').querySelector('span').textContent = 'Save Punch';
+            document.getElementById('ed-employee-field').classList.remove('hidden');
+            document.getElementById('ed-employee-display').classList.add('hidden');
+            populateEmployeeSelect();
+            document.getElementById('ed-date').value = dhakaDateInputValue();
+            document.getElementById('ed-clock-in').value = '';
+            document.getElementById('ed-clock-out').value = '';
+            document.getElementById('ed-status').value = 'PRESENT';
+            document.getElementById('ed-reason').value = '';
+            document.getElementById('attendance-edit-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function openEditModal(logId) {
+            const log = currentLogs.find(l => l.id === logId);
+            if (!log) return;
+            attendanceEditMode = 'edit';
+            attendanceEditLogId = log.id;
+            document.getElementById('ed-modal-title').textContent = 'Edit Attendance';
+            document.getElementById('ed-submit-label').querySelector('span').textContent = 'Save Changes';
+            document.getElementById('ed-employee-field').classList.add('hidden');
+            document.getElementById('ed-employee-display').classList.remove('hidden');
+            document.getElementById('ed-employee-name').textContent = log.user?.name || 'Unknown';
+            document.getElementById('ed-date').value = log.shift_date || dhakaDateInputValue();
+            document.getElementById('ed-clock-in').value = toTimeInputValue(log.clock_in_time);
+            document.getElementById('ed-clock-out').value = toTimeInputValue(log.clock_out_time);
+            document.getElementById('ed-status').value = log.manual_status || 'AUTO';
+            document.getElementById('ed-reason').value = '';
+            document.getElementById('attendance-edit-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeAttendanceEditModal() {
+            document.getElementById('attendance-edit-modal').classList.add('hidden');
+            document.body.style.overflow = '';
+            attendanceEditMode = null;
+            attendanceEditLogId = null;
+        }
+
+        async function submitAttendanceEdit(e) {
+            e.preventDefault();
+            const reason = document.getElementById('ed-reason').value.trim();
+            const status = document.getElementById('ed-status').value;
+            const clockIn = document.getElementById('ed-clock-in').value;
+            const clockOut = document.getElementById('ed-clock-out').value;
+
+            if (!reason) {
+                showMessage('Reason for change is required.', 'error');
+                return;
+            }
+
+            let url, method, body;
+            if (attendanceEditMode === 'create') {
+                url = `${API_BASE}/admin/attendance/punch`;
+                method = 'POST';
+                body = {
+                    user_id: document.getElementById('ed-employee').value,
+                    shift_date: document.getElementById('ed-date').value,
+                    clock_in: clockIn,
+                    clock_out: clockOut,
+                    status,
+                    reason,
+                };
+            } else {
+                url = `${API_BASE}/admin/attendance/logs/${attendanceEditLogId}`;
+                method = 'PUT';
+                body = { clock_in: clockIn, clock_out: clockOut, status, reason };
+            }
+
+            try {
+                const response = await fetchWithAuth(url, { method, body: JSON.stringify(body) });
+                const data = await response.json();
+                if (data.success) {
+                    showMessage(data.message || 'Attendance record updated', 'success');
+                    closeAttendanceEditModal();
+                    loadDashboard(true);
+                } else {
+                    showMessage(data.message || 'Failed to save attendance record', 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                showMessage('Error saving attendance record', 'error');
+            }
+        }
+
         function dhakaMonthYearDate() {
             const parts = dhakaDateParts(new Date());
             return new Date(Number(parts.year), Number(parts.month) - 1, 1);
@@ -303,15 +523,18 @@
 
                 const logs = data.data.attendance_today;
                 const attendanceTable = document.getElementById('attendance-table');
+                currentLogs = logs;
+                currentEmployees = data.data.employees || [];
 
                 if (data.data.employees) {
                     data.data.employees.forEach(e => { allEmployeeIds[e.name] = e.id; });
                 }
 
                 if (logs.length === 0) {
+                    currentLogs = [];
                     attendanceTable.innerHTML = `
                         <tr>
-                            <td colspan="6" class="py-12 text-center text-slate-400">
+                            <td colspan="7" class="py-12 text-center text-slate-400">
                                 <i class="fa-regular fa-folder-open text-2xl text-slate-300 mb-2 block"></i>
                                 <span>No attendance logs recorded for this date.</span>
                             </td>
@@ -356,8 +579,13 @@
                             <td class="py-3.5 px-4 font-semibold text-slate-700">${log.clock_out_time ? formatDhakaTime(log.clock_out_time) : '—'}</td>
                             <td class="py-3.5 px-4 font-mono text-xs text-slate-500">${isOnLeave ? '—' : log.ip_address}</td>
                             <td class="py-3.5 px-4 font-mono text-xs text-slate-500">${isOnLeave ? '—' : (log.device_id ? log.device_id.substring(0,12) + '...' : '—')}</td>
-                            <td class="py-3.5 px-6">
-                                <div class="flex items-center gap-1.5">${badgeHtml}${partialBadge}</div>
+<td class="py-3.5 px-6">
+                            <div class="flex items-center gap-1.5">${badgeHtml}${partialBadge}</div>
+                        </td>
+                            <td class="py-3.5 px-6 text-right">
+                                <button onclick="openEditModal('${log.id}')" class="w-8 h-8 bg-white hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 border border-slate-200 hover:border-indigo-200 rounded-lg flex items-center justify-center transition shadow-2xs" title="Edit attendance record">
+                                    <i class="fa-solid fa-pen text-[11px]"></i>
+                                </button>
                             </td>
                         </tr>
                     `}).join('');
@@ -536,8 +764,13 @@
         });
 
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeModal();
+            if (e.key === 'Escape') {
+                closeModal();
+                closeAttendanceEditModal();
+            }
         });
+
+        document.getElementById('attendance-edit-form').addEventListener('submit', submitAttendanceEdit);
 
         document.getElementById('attendance-date').addEventListener('change', loadDashboard);
         document.getElementById('attendance-date').value = dhakaDateInputValue();

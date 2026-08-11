@@ -19,6 +19,17 @@ function calculateDuration(clockIn, clockOut) {
   return `${hours}h ${minutes}m`;
 }
 
+function combineDateAndTime(dateStr, timeStr) {
+  if (!dateStr || !timeStr) return null;
+  const [h, m] = timeStr.split(':').map(Number);
+  if (isNaN(h) || isNaN(m)) return null;
+  return new Date(deadlineEpoch(dateStr, h, m));
+}
+
+function validateManualStatus(status) {
+  return ['PRESENT', 'LATE', 'ABSENT'].includes(status) ? status : null;
+}
+
 async function addAdmin(req, res) {
   try {
     const { name, email, password } = req.body;
@@ -295,14 +306,34 @@ async function adminDashboard(req, res) {
       });
 
       dailyLogs = logs.map((log) => {
-        const clockIn = new Date(log.clockInTime);
         const uid = log.user.id;
         const partialLeave = partialByUser[uid] || null;
 
+        const clockInTime = log.clockInTime ? new Date(log.clockInTime) : null;
         const [startHour, startMin] = officeStartTime.split(':').map(Number);
-        const logDate = localDateStr(new Date(clockIn));
-        const deadline = new Date(deadlineEpoch(logDate, startHour, startMin + graceMinutes));
-        const isLate = clockIn > deadline;
+        let isLate = false;
+        let lateMinutes = 0;
+        if (clockInTime) {
+          const logDate = localDateStr(clockInTime);
+          const deadline = new Date(deadlineEpoch(logDate, startHour, startMin + graceMinutes));
+          isLate = clockInTime > deadline;
+          lateMinutes = isLate ? Math.floor((clockInTime - deadline) / 60000) : 0;
+        }
+
+        let status = log.status;
+        if (log.manualStatus === 'PRESENT') {
+          status = 'VERIFIED';
+          isLate = false;
+          lateMinutes = 0;
+        } else if (log.manualStatus === 'LATE') {
+          status = status === 'ABSENT' ? 'VERIFIED' : status;
+          isLate = true;
+          lateMinutes = 0;
+        } else if (log.manualStatus === 'ABSENT') {
+          status = 'ABSENT';
+          isLate = false;
+          lateMinutes = 0;
+        }
 
         return {
           id: log.id,
@@ -315,9 +346,9 @@ async function adminDashboard(req, res) {
           clock_out_time: log.clockOutTime,
           ip_address: log.ipAddress,
           device_id: log.deviceIdUsed,
-          status: log.status,
+          status,
           is_late: isLate,
-          late_minutes: isLate ? Math.floor((clockIn - deadline) / 60000) : 0,
+          late_minutes: lateMinutes,
           partial_leave: partialLeave
             ? {
                 type: partialLeave.leaveType,
@@ -326,6 +357,11 @@ async function adminDashboard(req, res) {
                 to: partialLeave.partialTo,
               }
             : null,
+          shift_date: log.shiftDate,
+          manual_status: log.manualStatus,
+          is_manual: log.isManual,
+          edit_reason: log.editReason,
+          edited_by: log.editedBy,
         };
       });
 
@@ -516,6 +552,205 @@ async function getOfficeTime(req, res) {
   }
 }
 
+async function addManualPunch(req, res) {
+  try {
+    const { user_id, shift_date, clock_in, clock_out, status, reason } = req.body;
+
+    if (!user_id || !shift_date) {
+      return res.status(400).json({
+        success: false,
+        message: 'user_id and shift_date are required.',
+      });
+    }
+
+    const manualStatus = validateManualStatus(status);
+    if (!manualStatus) {
+      return res.status(400).json({
+        success: false,
+        message: 'status must be one of PRESENT, LATE, ABSENT.',
+      });
+    }
+
+    if (!reason || !String(reason).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'A reason for the change is required.',
+      });
+    }
+
+    const user = await User.findByPk(user_id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Employee not found.' });
+    }
+
+    const clockInTime = combineDateAndTime(shift_date, clock_in);
+    const clockOutTime = combineDateAndTime(shift_date, clock_out);
+    if (clockInTime && clockOutTime && clockOutTime < clockInTime) {
+      return res.status(400).json({
+        success: false,
+        message: 'Clock-out must be after clock-in.',
+      });
+    }
+
+    const existing = await AttendanceLog.findOne({
+      where: { userId: user_id, shiftDate: shift_date },
+    });
+
+    const fields = {
+      clockInTime,
+      clockOutTime,
+      manualStatus,
+      editReason: String(reason).trim(),
+      editedBy: req.user.name || req.user.email || 'Admin',
+      editedAt: new Date(),
+    };
+
+    let log;
+    if (existing) {
+      existing.set(fields);
+      existing.status = manualStatus === 'ABSENT' ? 'ABSENT' : 'VERIFIED';
+      log = await existing.save();
+    } else {
+      log = await AttendanceLog.create({
+        userId: user_id,
+        shiftDate: shift_date,
+        ipAddress: 'MANUAL',
+        deviceIdUsed: 'MANUAL',
+        status: manualStatus === 'ABSENT' ? 'ABSENT' : 'VERIFIED',
+        isManual: true,
+        ...fields,
+      });
+    }
+
+    await cache.del(`daily_summary:${shift_date}`);
+
+    return res.status(existing ? 200 : 201).json({
+      success: true,
+      message: existing ? 'Attendance record updated.' : 'Manual punch recorded.',
+      data: {
+        id: log.id,
+        user_id,
+        shift_date,
+        manual_status: log.manualStatus,
+        edit_reason: log.editReason,
+        edited_by: log.editedBy,
+      },
+    });
+  } catch (err) {
+    console.error('Add manual punch error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'An error occurred while recording the manual punch.',
+    });
+  }
+}
+
+async function editAttendanceLog(req, res) {
+  try {
+    const { logId } = req.params;
+    const { clock_in, clock_out, status, reason } = req.body;
+
+    if (!reason || !String(reason).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'A reason for the change is required.',
+      });
+    }
+
+    if (status === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'status is required.',
+      });
+    }
+
+    const manualStatus = status === 'AUTO' ? null : validateManualStatus(status);
+    if (status !== 'AUTO' && !manualStatus) {
+      return res.status(400).json({
+        success: false,
+        message: 'status must be one of PRESENT, LATE, ABSENT, or AUTO.',
+      });
+    }
+
+    const log = await AttendanceLog.findByPk(logId);
+    if (!log) {
+      return res.status(404).json({ success: false, message: 'Attendance log not found.' });
+    }
+
+    const baseDate = log.shiftDate || localDateStr(log.clockInTime || new Date());
+    const previousDate = log.shiftDate || (log.clockInTime ? localDateStr(log.clockInTime) : null);
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'clock_in')) {
+      log.clockInTime = combineDateAndTime(baseDate, clock_in);
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, 'clock_out')) {
+      log.clockOutTime = combineDateAndTime(baseDate, clock_out);
+    }
+
+    if (log.clockInTime && log.clockOutTime && log.clockOutTime < log.clockInTime) {
+      return res.status(400).json({
+        success: false,
+        message: 'Clock-out must be after clock-in.',
+      });
+    }
+
+    log.manualStatus = manualStatus;
+    if (manualStatus === 'ABSENT') {
+      log.status = 'ABSENT';
+    } else if (manualStatus === 'PRESENT' || manualStatus === 'LATE') {
+      log.status = 'VERIFIED';
+    }
+    log.editReason = String(reason).trim();
+    log.editedBy = req.user.name || req.user.email || 'Admin';
+    log.editedAt = new Date();
+
+    await log.save();
+
+    if (baseDate) await cache.del(`daily_summary:${baseDate}`);
+    if (previousDate && previousDate !== baseDate) await cache.del(`daily_summary:${previousDate}`);
+
+    return res.json({
+      success: true,
+      message: 'Attendance record updated.',
+      data: {
+        id: log.id,
+        manual_status: log.manualStatus,
+        edit_reason: log.editReason,
+        edited_by: log.editedBy,
+      },
+    });
+  } catch (err) {
+    console.error('Edit attendance log error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'An error occurred while updating the attendance record.',
+    });
+  }
+}
+
+async function deleteAttendanceLog(req, res) {
+  try {
+    const { logId } = req.params;
+
+    const log = await AttendanceLog.findByPk(logId);
+    if (!log) {
+      return res.status(404).json({ success: false, message: 'Attendance log not found.' });
+    }
+
+    const date = log.shiftDate || (log.clockInTime ? localDateStr(log.clockInTime) : null);
+    await log.destroy();
+    if (date) await cache.del(`daily_summary:${date}`);
+
+    return res.json({ success: true, message: 'Attendance record deleted.' });
+  } catch (err) {
+    console.error('Delete attendance log error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'An error occurred while deleting the attendance record.',
+    });
+  }
+}
+
 async function exportCsv(req, res) {
   try {
     const { startDate, endDate } = req.query;
@@ -566,7 +801,7 @@ async function exportCsv(req, res) {
           : '',
         ip_address: log.ipAddress,
         device_id: log.deviceIdUsed,
-        status: log.status,
+        status: log.manualStatus || log.status,
         late: 'No', // Will be calculated below
       };
     });
@@ -737,12 +972,27 @@ async function getEmployeeMonthlySummary(req, res) {
           totalWorkMinutes += (new Date(clockOut) - new Date(clockIn)) / 60000;
         }
 
-        if (isLate) {
+        if (dayLog.manualStatus === 'PRESENT') {
+          isLate = false;
+          lateMin = 0;
+          status = 'VERIFIED';
+        } else if (dayLog.manualStatus === 'LATE') {
+          isLate = false;
+          lateMin = 0;
           status = 'LATE';
+        } else if (dayLog.manualStatus === 'ABSENT') {
+          isLate = false;
+          lateMin = 0;
+          status = 'ABSENT';
+        }
+
+        if (status === 'LATE') {
           late++;
           totalLateMinutes += lateMin;
         } else if (status === 'VERIFIED') {
           present++;
+        } else if (status === 'ABSENT') {
+          absent++;
         }
       } else {
         absent++;
@@ -946,11 +1196,19 @@ async function getAllEmployeesMonthlySummary(req, res) {
           else if (dayLeave.leaveType === 'paid') paidLeaveDays++;
           else if (dayLeave.leaveType === 'unpaid') unpaidLeaveDays++;
         } else if (dayLog) {
-          const clockIn = new Date(dayLog.clockInTime);
+          const clockIn = dayLog.clockInTime ? new Date(dayLog.clockInTime) : null;
           const clockOut = dayLog.clockOutTime;
           kpiTotalShifts++;
 
-          if (clockIn) {
+          if (dayLog.manualStatus === 'ABSENT') {
+            absentCount++;
+          } else if (dayLog.manualStatus === 'LATE') {
+            lateCount++;
+            kpiTotalLate++;
+          } else if (dayLog.manualStatus === 'PRESENT') {
+            present++;
+            kpiTotalOnTime++;
+          } else if (clockIn) {
             const shiftDate = dayLog.shiftDate || localDateStr(clockIn);
             const deadline = new Date(deadlineEpoch(shiftDate, startH, startM + graceMinutes));
             const isLate = clockIn > deadline;
@@ -1108,10 +1366,16 @@ async function exportMonthlyReportCsv(req, res) {
           else if (dayLeave.leaveType === 'paid') paidLeaveDays++;
           else if (dayLeave.leaveType === 'unpaid') unpaidLeaveDays++;
         } else if (dayLog) {
-          const clockIn = new Date(dayLog.clockInTime);
+          const clockIn = dayLog.clockInTime ? new Date(dayLog.clockInTime) : null;
           const clockOut = dayLog.clockOutTime;
 
-          if (clockIn) {
+          if (dayLog.manualStatus === 'ABSENT') {
+            absentCount++;
+          } else if (dayLog.manualStatus === 'LATE') {
+            lateCount++;
+          } else if (dayLog.manualStatus === 'PRESENT') {
+            present++;
+          } else if (clockIn) {
             const deadline = new Date(d);
             deadline.setHours(startH, startM + graceMinutes, 0, 0);
             if (clockIn > deadline) {
@@ -1183,4 +1447,7 @@ module.exports = {
   deleteUser,
   getAllEmployeesMonthlySummary,
   exportMonthlyReportCsv,
+  addManualPunch,
+  editAttendanceLog,
+  deleteAttendanceLog,
 };

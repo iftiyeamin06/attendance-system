@@ -351,6 +351,78 @@ async function runTests() {
   });
   test('Cleanup: leave deleted', delLeave.status === 200, `Status: ${delLeave.status}`);
 
+  console.log('\n12. Attendance Edit & Manual Punch\n');
+
+  const punchNoReason = await request('POST', '/api/admin/attendance/punch', {
+    user_id: employee.id,
+    shift_date: dateStr,
+    clock_in: '09:15',
+    status: 'PRESENT',
+  }, { Authorization: `Bearer ${adminToken}` });
+  test('Manual punch rejected without reason',
+    punchNoReason.status === 400,
+    `Status: ${punchNoReason.status}, Message: ${punchNoReason.body.message}`);
+
+  const punchForbidden = await request('POST', '/api/admin/attendance/punch', {
+    user_id: employee.id,
+    shift_date: dateStr,
+    clock_in: '09:15',
+    status: 'PRESENT',
+    reason: 'test',
+  }, { Authorization: `Bearer ${token}` });
+  test('Employee blocked from manual punch', punchForbidden.status === 403,
+    `Status: ${punchForbidden.status}`);
+
+  const punch = await request('POST', '/api/admin/attendance/punch', {
+    user_id: employee.id,
+    shift_date: dateStr,
+    clock_in: '09:15',
+    clock_out: '17:00',
+    status: 'PRESENT',
+    reason: 'Admin correction - missed clock-in',
+  }, { Authorization: `Bearer ${adminToken}` });
+  const punchId = punch.body.data?.id;
+  test('Admin creates manual punch',
+    (punch.status === 200 || punch.status === 201) && !!punchId,
+    `Status: ${punch.status}, Data: ${JSON.stringify(punch.body.data)}`);
+
+  const dashPunch = await request('GET', `/api/admin/dashboard?date=${dateStr}&refresh=true`, null, {
+    Authorization: `Bearer ${adminToken}`,
+  });
+  const punchRow = dashPunch.body.data?.attendance_today?.find(l => l.id === punchId);
+  test('Manual punch visible on dashboard',
+    dashPunch.status === 200 && !!punchRow && punchRow.status === 'VERIFIED' && punchRow.manual_status === 'PRESENT',
+    JSON.stringify(punchRow));
+
+  const editNoReason = await request('PUT', `/api/admin/attendance/logs/${punchId}`, {
+    clock_in: '09:40',
+    status: 'LATE',
+  }, { Authorization: `Bearer ${adminToken}` });
+  test('Edit rejected without reason', editNoReason.status === 400,
+    `Status: ${editNoReason.status}, Message: ${editNoReason.body.message}`);
+
+  const edit = await request('PUT', `/api/admin/attendance/logs/${punchId}`, {
+    clock_in: '09:40',
+    status: 'LATE',
+    reason: 'Late arrival confirmed by HR',
+  }, { Authorization: `Bearer ${adminToken}` });
+  test('Admin edits attendance log',
+    edit.status === 200 && edit.body.data?.manual_status === 'LATE',
+    `Status: ${edit.status}, Data: ${JSON.stringify(edit.body.data)}`);
+
+  const dashEdit = await request('GET', `/api/admin/dashboard?date=${dateStr}&refresh=true`, null, {
+    Authorization: `Bearer ${adminToken}`,
+  });
+  const editRow = dashEdit.body.data?.attendance_today?.find(l => l.id === punchId);
+  test('Edited log shows LATE on dashboard',
+    dashEdit.status === 200 && !!editRow && editRow.is_late === true,
+    `Row: ${JSON.stringify(editRow)}`);
+
+  const delPunch = await request('DELETE', `/api/admin/attendance/logs/${punchId}`, null, {
+    Authorization: `Bearer ${adminToken}`,
+  });
+  test('Cleanup: manual punch deleted', delPunch.status === 200, `Status: ${delPunch.status}`);
+
   console.log('\n--- Test Summary ---\n');
   const passed = results.filter((r) => r.status === 'PASS').length;
   const failed = results.filter((r) => r.status === 'FAIL').length;

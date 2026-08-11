@@ -52,6 +52,32 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: 'VERIFIED',
       },
+      manualStatus: {
+        type: DataTypes.STRING(10),
+        allowNull: true,
+        field: 'manual_status',
+      },
+      editReason: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        field: 'edit_reason',
+      },
+      editedBy: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        field: 'edited_by',
+      },
+      editedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        field: 'edited_at',
+      },
+      isManual: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+        field: 'is_manual',
+      },
     },
     {
       sequelize,
