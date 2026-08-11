@@ -17,6 +17,7 @@ router.post('/users/:userId/reset-device', adminController.resetDevice);
 router.post('/users/:userId/bind-device', adminController.bindDevice);
 router.get('/users/:userId/device-binding', adminController.getUserDeviceBinding);
 router.delete('/users/:userId', adminController.deleteUser);
+router.post('/users/:userId/reset-password', adminController.resetUserPassword);
 router.get('/employee/:userId/summary', adminController.getEmployeeMonthlySummary);
 router.get('/report/summary', adminController.getAllEmployeesMonthlySummary);
 router.get('/report/export', adminController.exportMonthlyReportCsv);

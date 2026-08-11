@@ -46,6 +46,17 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
         field: 'bound_device_id',
       },
+      mustChangePassword: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+        field: 'must_change_password',
+      },
+      passwordChangedAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        field: 'password_changed_at',
+      },
     },
     {
       sequelize,

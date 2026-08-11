@@ -137,6 +137,7 @@ async function runTests() {
     `Role: ${adminLogin.body.user?.role}`);
 
   const adminToken = adminLogin.body.token;
+  const adminId = adminLogin.body.user.id;
   const dashboard = await request('GET', '/api/admin/dashboard', null, {
     Authorization: `Bearer ${adminToken}`,
   });
@@ -422,6 +423,128 @@ async function runTests() {
     Authorization: `Bearer ${adminToken}`,
   });
   test('Cleanup: manual punch deleted', delPunch.status === 200, `Status: ${delPunch.status}`);
+
+  console.log('\n13. Password Reset & Account Security\n');
+
+  const pwEmail = `pwtest.${Date.now()}@attendance.local`;
+  const pwInitial = 'pw-initial-123';
+
+  const pwCreate = await request('POST', '/api/admin/users', {
+    name: 'PW Reset Test',
+    email: pwEmail,
+    password: pwInitial,
+  }, { Authorization: `Bearer ${adminToken}` });
+  const pwUserId = pwCreate.body.data?.id;
+  test('Create temp employee for reset tests',
+    (pwCreate.status === 200 || pwCreate.status === 201) && !!pwUserId,
+    `Status: ${pwCreate.status}`);
+
+  const pwEmpLogin = await request('POST', '/api/auth/login', {
+    email: pwEmail,
+    password: pwInitial,
+  });
+  const pwEmpToken = pwEmpLogin.body.token;
+  test('Temp employee can sign in', pwEmpLogin.status === 200 && !!pwEmpToken, `Status: ${pwEmpLogin.status}`);
+
+  const pwForbidden = await request('POST', `/api/admin/users/${pwUserId}/reset-password`, null, {
+    Authorization: `Bearer ${pwEmpToken}`,
+  });
+  test('Employee blocked from admin reset', pwForbidden.status === 403, `Status: ${pwForbidden.status}`);
+
+  const pwReset = await request('POST', `/api/admin/users/${pwUserId}/reset-password`, {
+    password: 'newtemp123',
+  }, { Authorization: `Bearer ${adminToken}` });
+  test('Admin resets employee password with custom password',
+    pwReset.status === 200 && pwReset.body.temporary_password === 'newtemp123' && pwReset.body.must_change_password === true,
+    `Status: ${pwReset.status}`);
+
+  const pwCustomShort = await request('POST', `/api/admin/users/${pwUserId}/reset-password`, {
+    password: 'short',
+  }, { Authorization: `Bearer ${adminToken}` });
+  test('Short custom password rejected', pwCustomShort.status === 400, `Status: ${pwCustomShort.status}`);
+
+  const pwAdminSelfReset = await request('POST', `/api/admin/users/${adminId}/reset-password`, null, {
+    Authorization: `Bearer ${adminToken}`,
+  });
+  test('Admin reset on admin account blocked', pwAdminSelfReset.status === 400, `Status: ${pwAdminSelfReset.status}`);
+
+  const pwOldLogin = await request('POST', '/api/auth/login', {
+    email: pwEmail,
+    password: pwInitial,
+  });
+  test('Old password no longer works', pwOldLogin.status === 401, `Status: ${pwOldLogin.status}`);
+
+  const pwNewLogin = await request('POST', '/api/auth/login', {
+    email: pwEmail,
+    password: 'newtemp123',
+  });
+  test('Login with temp password flags forced change',
+    pwNewLogin.status === 200 && pwNewLogin.body.user.must_change_password === true,
+    `Status: ${pwNewLogin.status}`);
+
+  const pwForcedChange = await request('POST', '/api/auth/change-password', {
+    current_password: 'newtemp123',
+    new_password: 'freshpwd456',
+  }, { Authorization: `Bearer ${pwNewLogin.body.token}` });
+  test('Forced password change succeeds', pwForcedChange.status === 200, `Status: ${pwForcedChange.status}`);
+
+  const pwNewPassLogin = await request('POST', '/api/auth/login', {
+    email: pwEmail,
+    password: 'freshpwd456',
+  });
+  test('Login after forced change clears flag',
+    pwNewPassLogin.status === 200 && pwNewPassLogin.body.user.must_change_password === false,
+    `Status: ${pwNewPassLogin.status}`);
+
+  const pwForgot = await request('POST', '/api/auth/forgot-password', {
+    email: pwEmail,
+  });
+  const pwResetToken = pwForgot.body.reset_token;
+  test('Forgot password returns one-time token',
+    pwForgot.status === 200 && pwForgot.body.success && !!pwResetToken,
+    `Status: ${pwForgot.status}`);
+
+  const pwResetVia = await request('POST', '/api/auth/reset-password', {
+    token: pwResetToken,
+    new_password: 'resetme789',
+  });
+  test('Reset password with token succeeds', pwResetVia.status === 200, `Status: ${pwResetVia.status}`);
+
+  const pwResetReuse = await request('POST', '/api/auth/reset-password', {
+    token: pwResetToken,
+    new_password: 'whatever456',
+  });
+  test('Used reset token rejected', pwResetReuse.status === 400, `Status: ${pwResetReuse.status}`);
+
+  const pwResetGarbage = await request('POST', '/api/auth/reset-password', {
+    token: 'not-a-real-token',
+    new_password: 'whatever456',
+  });
+  test('Garbage reset token rejected', pwResetGarbage.status === 400, `Status: ${pwResetGarbage.status}`);
+
+  const pwResetShort = await request('POST', '/api/auth/reset-password', {
+    token: pwResetToken,
+    new_password: '123',
+  });
+  test('Short reset password rejected', pwResetShort.status === 400, `Status: ${pwResetShort.status}`);
+
+  const pwForgotUnknown = await request('POST', '/api/auth/forgot-password', {
+    email: 'doesnotexist@attendance.local',
+  });
+  test('Unknown email does not leak account existence',
+    pwForgotUnknown.status === 200 && pwForgotUnknown.body.success && !pwForgotUnknown.body.reset_token,
+    `Status: ${pwForgotUnknown.status}`);
+
+  const pwNewLogin3 = await request('POST', '/api/auth/login', {
+    email: pwEmail,
+    password: 'resetme789',
+  });
+  test('Login with reset password works', pwNewLogin3.status === 200, `Status: ${pwNewLogin3.status}`);
+
+  const pwCleanup = await request('DELETE', `/api/admin/users/${pwUserId}`, null, {
+    Authorization: `Bearer ${adminToken}`,
+  });
+  test('Cleanup: temp employee deleted', pwCleanup.status === 200, `Status: ${pwCleanup.status}`);
 
   console.log('\n--- Test Summary ---\n');
   const passed = results.filter((r) => r.status === 'PASS').length;

@@ -1,6 +1,7 @@
-const { User, AttendanceLog, Setting, Leave } = require('../models');
+const { User, AttendanceLog, Setting, Leave, PasswordReset } = require('../models');
 const cache = require('../redis/cache');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { Parser } = require('json2csv');
 const { Op, fn, col, literal } = require('sequelize');
 const {
@@ -1081,6 +1082,7 @@ async function deleteUser(req, res) {
     await cache.del(`bound_device:${userId}`);
     await AttendanceLog.destroy({ where: { userId } });
     await Leave.destroy({ where: { userId } });
+    await PasswordReset.destroy({ where: { userId } });
     await user.destroy();
 
     return res.status(200).json({
@@ -1450,4 +1452,65 @@ module.exports = {
   addManualPunch,
   editAttendanceLog,
   deleteAttendanceLog,
+  resetUserPassword,
 };
+
+async function resetUserPassword(req, res) {
+  try {
+    const { userId } = req.params;
+    const { password } = req.body || {};
+
+    const target = await User.findByPk(userId);
+
+    if (!target) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found.',
+      });
+    }
+
+    if (target.role === 'admin') {
+      return res.status(400).json({
+        success: false,
+        message: 'Admin passwords cannot be reset from this panel.',
+      });
+    }
+
+    let tempPassword = password ? String(password).trim() : '';
+
+    if (tempPassword && tempPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Custom password must be at least 8 characters long.',
+      });
+    }
+
+    if (!tempPassword) {
+      tempPassword = crypto
+        .randomBytes(9)
+        .toString('base64')
+        .replace(/[^a-zA-Z0-9]/g, '')
+        .slice(0, 12);
+    }
+
+    const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
+    target.password = await bcrypt.hash(tempPassword, saltRounds);
+    target.mustChangePassword = true;
+    target.passwordChangedAt = new Date();
+    await target.save();
+
+    return res.json({
+      success: true,
+      message:
+        'Password reset. The employee must change it on their next login.',
+      temporary_password: tempPassword,
+      must_change_password: true,
+    });
+  } catch (err) {
+    console.error('Reset user password error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'An error occurred while resetting the password.',
+    });
+  }
+}

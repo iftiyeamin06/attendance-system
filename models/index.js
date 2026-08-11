@@ -21,6 +21,7 @@ db.User = require('./user')(sequelize, Sequelize.DataTypes);
 db.Setting = require('./setting')(sequelize, Sequelize.DataTypes);
 db.AttendanceLog = require('./attendanceLog')(sequelize, Sequelize.DataTypes);
 db.Leave = require('./leave')(sequelize, Sequelize.DataTypes);
+db.PasswordReset = require('./passwordReset')(sequelize, Sequelize.DataTypes);
 
 Object.keys(db).forEach((modelName) => {
   if (db[modelName] && typeof db[modelName].associate === 'function') {

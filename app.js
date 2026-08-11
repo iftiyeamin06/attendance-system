@@ -56,6 +56,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/leaves', leaveRoutes);
 
 function homePathFor(user) {
+  if (user && user.mustChangePassword) return '/change-password';
   if (user && user.role === 'admin') return '/admin/dashboard';
   if (user && user.role === 'employee') return '/employee/dashboard';
   return '/login';
@@ -84,6 +85,9 @@ function requireWebAuth(req, res, next) {
   if (!req.session || !req.session.user) {
     return res.redirect('/login');
   }
+  if (req.session.user.mustChangePassword && req.path !== '/change-password') {
+    return res.redirect('/change-password');
+  }
   req.user = req.session.user;
   next();
 }
@@ -91,6 +95,9 @@ function requireWebAuth(req, res, next) {
 function requireAdminWeb(req, res, next) {
   if (!req.session || !req.session.user || req.session.user.role !== 'admin') {
     return res.redirect('/login');
+  }
+  if (req.session.user.mustChangePassword && req.path !== '/change-password') {
+    return res.redirect('/change-password');
   }
   req.user = req.session.user;
   next();
@@ -162,6 +169,24 @@ app.get('/employee/settings', requireWebAuth, async (req, res) => {
   });
 });
 
+app.get('/forgot-password', (req, res) => {
+  res.render('auth/forgot-password', { error: null });
+});
+
+app.get('/reset-password', (req, res) => {
+  const token = typeof req.query.token === 'string' ? req.query.token : '';
+  res.render('auth/reset-password', { error: null, token });
+});
+
+app.get('/change-password', requireWebAuth, (req, res) => {
+  res.render('auth/change-password', {
+    user: req.session.user,
+    token: req.session.token,
+    title: 'Change Password',
+    page: 'change-password',
+  });
+});
+
 app.get('/logout', (req, res) => {
   req.session.destroy(() => {
     res.redirect('/login');
@@ -190,10 +215,17 @@ app.post('/api/auth/login-web', async (req, res) => {
       email: user.email,
       role: user.role,
       boundDeviceId: user.boundDeviceId,
+      mustChangePassword: !!user.mustChangePassword,
     };
     req.session.save();
 
-    res.redirect(user.role === 'admin' ? '/admin/dashboard' : '/employee/dashboard');
+    res.redirect(
+      user.mustChangePassword
+        ? '/change-password'
+        : user.role === 'admin'
+          ? '/admin/dashboard'
+          : '/employee/dashboard'
+    );
   } catch (err) {
     res.render('auth/login', { error: 'An error occurred.' });
   }
@@ -221,10 +253,17 @@ app.post('/api/auth/admin-login-web', async (req, res) => {
       email: user.email,
       role: user.role,
       boundDeviceId: user.boundDeviceId,
+      mustChangePassword: !!user.mustChangePassword,
     };
     req.session.save();
 
-    res.redirect(user.role === 'admin' ? '/admin/dashboard' : '/employee/dashboard');
+    res.redirect(
+      user.mustChangePassword
+        ? '/change-password'
+        : user.role === 'admin'
+          ? '/admin/dashboard'
+          : '/employee/dashboard'
+    );
   } catch (err) {
     res.render('auth/login', { error: 'An error occurred.' });
   }

@@ -239,6 +239,101 @@
             </div>
         </div>
 
+        <!-- Reset Password Modal -->
+        <div id="reset-password-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-md transition-opacity" onclick="closeResetModal()"></div>
+            <div class="relative w-full max-w-md bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200 max-h-full">
+                <!-- Modal Header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center font-bold shadow-xs">
+                            <i class="fa-solid fa-key text-base"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-base font-extrabold text-slate-900">Reset Password</h2>
+                            <p class="text-xs text-slate-400 font-medium">Link <span id="rp-employee-name" class="font-bold text-slate-600">Employee</span> to a new password</p>
+                        </div>
+                    </div>
+                    <button onclick="closeResetModal()" class="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl flex items-center justify-center transition">
+                        <i class="fa-solid fa-xmark text-sm"></i>
+                    </button>
+                </div>
+
+                <!-- Modal Body -->
+                <div class="flex-1 overflow-y-auto p-6">
+                    <div id="rp-form">
+                        <div class="space-y-2 mb-5">
+                            <label class="flex items-start space-x-2.5 cursor-pointer">
+                                <input type="radio" name="rp-mode" value="generate" checked onclick="toggleResetMode()"
+                                    class="mt-0.5 accent-amber-600">
+                                <span>
+                                    <span class="block text-sm font-bold text-slate-800">Generate temporary password</span>
+                                    <span class="block text-xs text-slate-400 font-medium">A strong password is created for you. Show it to the employee — they must change it on next login.</span>
+                                </span>
+                            </label>
+                            <label class="flex items-start space-x-2.5 cursor-pointer">
+                                <input type="radio" name="rp-mode" value="custom" onclick="toggleResetMode()"
+                                    class="mt-0.5 accent-amber-600">
+                                <span>
+                                    <span class="block text-sm font-bold text-slate-800">Set a custom password</span>
+                                    <span class="block text-xs text-slate-400 font-medium">Type the new password yourself (min 8 characters).</span>
+                                </span>
+                            </label>
+                        </div>
+
+                        <div class="mb-5 hidden" id="rp-custom-wrap">
+                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">New Password</label>
+                            <div class="relative">
+                                <i class="fa-solid fa-key absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                <input type="text" id="rp-custom-password"
+                                    class="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-amber-500 focus:bg-white transition"
+                                    placeholder="At least 8 characters">
+                            </div>
+                        </div>
+
+                        <div class="bg-amber-50 border border-amber-200/60 rounded-xl p-3.5 text-xs text-amber-700 font-semibold mb-5 flex items-start space-x-2">
+                            <i class="fa-solid fa-circle-exclamation mt-0.5"></i>
+                            <span>The employee will be forced to change this password the first time they sign in.</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <button type="button" onclick="closeResetModal()"
+                                class="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition">
+                                Cancel
+                            </button>
+                            <button type="button" onclick="submitResetPassword()" id="rp-submit-btn"
+                                class="bg-amber-600 hover:bg-amber-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition shadow-sm flex items-center justify-center space-x-2">
+                                <i class="fa-solid fa-key"></i>
+                                <span>Reset Password</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="rp-result" class="hidden">
+                        <div class="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl mb-5 text-xs font-semibold flex items-center space-x-2">
+                            <i class="fa-solid fa-circle-check text-emerald-500"></i>
+                            <span>Password reset. The employee must change it on their next login.</span>
+                        </div>
+
+                        <div id="rp-generated-wrap" class="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-5">
+                            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Temporary Password</p>
+                            <div class="flex items-center space-x-2">
+                                <code id="rp-generated" class="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono font-bold text-slate-800 break-all select-all"></code>
+                                <button onclick="copyTemporaryPassword()" class="bg-slate-900 hover:bg-slate-800 text-white rounded-lg px-3 py-2 text-xs font-bold transition" title="Copy">
+                                    <i class="fa-regular fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button type="button" onclick="closeResetModal()"
+                            class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl text-xs uppercase tracking-wider transition shadow-sm">
+                            Done
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Users Management Table -->
         <div class="surface-card overflow-hidden mb-8">
             <div class="p-5 border-b border-slate-100 flex items-center justify-between flex-wrap gap-4 bg-slate-50/50">
@@ -467,6 +562,10 @@
                                        </button>`
                                     : ''
                                 }
+                                <button onclick="openResetModal('${emp.id}', '${emp.name.replace(/'/g, "\\'")}')" class="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/60 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1" title="Reset password and force change on next login">
+                                    <i class="fa-solid fa-key text-[10px]"></i>
+                                    <span>Reset PW</span>
+                                </button>
                                 ` : ''}
                                 <button onclick="deleteUser('${emp.id}', '${emp.name.replace(/'/g, "\\'")}', '${emp.role}')" class="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1" title="Delete ${emp.role}">
                                     <i class="fa-regular fa-trash-can text-[10px]"></i>
@@ -620,6 +719,97 @@
                     showMessage(data.message || 'Failed to reset device binding', 'error');
                 }
             } catch (err) { console.error(err); }
+        }
+
+        let resetUserId = null;
+        let lastGeneratedPassword = '';
+
+        function openResetModal(userId, name) {
+            resetUserId = userId;
+            lastGeneratedPassword = '';
+            document.getElementById('rp-employee-name').textContent = name || 'Employee';
+            document.getElementById('rp-form').classList.remove('hidden');
+            document.getElementById('rp-result').classList.add('hidden');
+            document.getElementById('rp-custom-password').value = '';
+            document.querySelector('input[name="rp-mode"][value="generate"]').checked = true;
+            toggleResetMode();
+            document.getElementById('reset-password-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeResetModal() {
+            document.getElementById('reset-password-modal').classList.add('hidden');
+            document.body.style.overflow = '';
+            resetUserId = null;
+        }
+
+        function toggleResetMode() {
+            const mode = document.querySelector('input[name="rp-mode"]:checked').value;
+            document.getElementById('rp-custom-wrap').classList.toggle('hidden', mode !== 'custom');
+        }
+
+        async function submitResetPassword() {
+            if (!resetUserId) return;
+            const mode = document.querySelector('input[name="rp-mode"]:checked').value;
+            const customPassword = document.getElementById('rp-custom-password').value;
+
+            if (mode === 'custom' && customPassword.length < 8) {
+                alert('Custom password must be at least 8 characters long.');
+                return;
+            }
+
+            const btn = document.getElementById('rp-submit-btn');
+            btn.disabled = true;
+            btn.querySelector('span').textContent = 'Resetting...';
+
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/users/${resetUserId}/reset-password`, {
+                    method: 'POST',
+                    body: JSON.stringify(mode === 'custom' ? { password: customPassword } : {}),
+                });
+                const data = await response.json();
+
+                if (!data.success) {
+                    alert(data.message || 'Failed to reset password.');
+                    return;
+                }
+
+                lastGeneratedPassword = data.temporary_password || '';
+                document.getElementById('rp-form').classList.add('hidden');
+                document.getElementById('rp-result').classList.remove('hidden');
+
+                if (lastGeneratedPassword) {
+                    document.getElementById('rp-generated').textContent = lastGeneratedPassword;
+                    document.getElementById('rp-generated-wrap').classList.remove('hidden');
+                } else {
+                    document.getElementById('rp-generated-wrap').classList.add('hidden');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error resetting password.');
+            } finally {
+                btn.disabled = false;
+                btn.querySelector('span').textContent = 'Reset Password';
+            }
+        }
+
+        function copyTemporaryPassword() {
+            if (!lastGeneratedPassword) return;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(lastGeneratedPassword).then(() => {
+                    showMessage('Temporary password copied', 'success');
+                });
+            } else {
+                const el = document.getElementById('rp-generated');
+                const range = document.createRange();
+                range.selectNodeContents(el);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+                document.execCommand('copy');
+                sel.removeAllRanges();
+                showMessage('Temporary password copied', 'success');
+            }
         }
 
         document.getElementById('add-employee-form').addEventListener('submit', async (e) => {
@@ -856,6 +1046,7 @@
                 if (!document.getElementById('add-employee-modal').classList.contains('hidden')) closeAddEmployeeModal();
                 if (!document.getElementById('add-admin-modal').classList.contains('hidden')) closeAddAdminModal();
                 if (!document.getElementById('bind-device-modal').classList.contains('hidden')) closeBindModal();
+                if (!document.getElementById('reset-password-modal').classList.contains('hidden')) closeResetModal();
             }
         });
 
