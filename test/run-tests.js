@@ -60,8 +60,8 @@ async function runTests() {
 
   console.log('\n1b. Test Fixture Setup');
   const adminLogin = await request('POST', '/api/auth/login', {
-    email: 'admin@attendance.local',
-    password: 'admin123',
+    email: process.env.TEST_ADMIN_EMAIL || 'admin@attendance.local',
+    password: process.env.TEST_ADMIN_PASSWORD || 'admin123',
   });
   test('Admin login', adminLogin.status === 200 && adminLogin.body.user.role === 'admin',
     `Role: ${adminLogin.body.user?.role}`);
