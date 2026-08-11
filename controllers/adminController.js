@@ -584,12 +584,22 @@ async function addManualPunch(req, res) {
       return res.status(404).json({ success: false, message: 'Employee not found.' });
     }
 
-    const clockInTime = combineDateAndTime(shift_date, clock_in);
-    const clockOutTime = combineDateAndTime(shift_date, clock_out);
+    let clockInTime = combineDateAndTime(shift_date, clock_in);
+    let clockOutTime = combineDateAndTime(shift_date, clock_out);
     if (clockInTime && clockOutTime && clockOutTime < clockInTime) {
       return res.status(400).json({
         success: false,
         message: 'Clock-out must be after clock-in.',
+      });
+    }
+
+    if (manualStatus === 'ABSENT') {
+      clockInTime = null;
+      clockOutTime = null;
+    } else if (!clockInTime || !clockOutTime) {
+      return res.status(400).json({
+        success: false,
+        message: 'clock_in and clock_out are required for PRESENT or LATE punches.',
       });
     }
 
@@ -692,6 +702,16 @@ async function editAttendanceLog(req, res) {
       return res.status(400).json({
         success: false,
         message: 'Clock-out must be after clock-in.',
+      });
+    }
+
+    if (manualStatus === 'ABSENT') {
+      log.clockInTime = null;
+      log.clockOutTime = null;
+    } else if ((manualStatus === 'PRESENT' || manualStatus === 'LATE') && (!log.clockInTime || !log.clockOutTime)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Clock-in and clock-out times are required for PRESENT or LATE corrections.',
       });
     }
 

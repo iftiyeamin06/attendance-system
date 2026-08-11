@@ -58,10 +58,33 @@ async function runTests() {
   const health = await request('GET', '/api/health');
   test('Health endpoint returns 200', health.status === 200, `Status: ${health.status}`);
 
+  console.log('\n1b. Test Fixture Setup');
+  const adminLogin = await request('POST', '/api/auth/login', {
+    email: 'admin@attendance.local',
+    password: 'admin123',
+  });
+  test('Admin login', adminLogin.status === 200 && adminLogin.body.user.role === 'admin',
+    `Role: ${adminLogin.body.user?.role}`);
+
+  const adminToken = adminLogin.body.token;
+  const adminId = adminLogin.body.user.id;
+
+  const e2eEmail = `e2e.${Date.now()}@attendance.local`;
+  const e2ePassword = 'e2e-pass-123';
+  const e2eCreate = await request('POST', '/api/admin/users', {
+    name: 'E2E Test Employee',
+    email: e2eEmail,
+    password: e2ePassword,
+  }, { Authorization: `Bearer ${adminToken}` });
+  const employee = { id: e2eCreate.body.data?.id, email: e2eEmail };
+  test('Create dedicated test employee',
+    (e2eCreate.status === 200 || e2eCreate.status === 201) && !!employee.id,
+    `Status: ${e2eCreate.status}, Email: ${e2eEmail}`);
+
   console.log('\n2. Authentication');
   const loginRes = await request('POST', '/api/auth/login', {
-    email: 'iftiyeamin06@gmail.com',
-    password: 'pass123',
+    email: e2eEmail,
+    password: e2ePassword,
   });
   test('Login with valid credentials', loginRes.status === 200, `Status: ${loginRes.status}`);
 
@@ -69,22 +92,12 @@ async function runTests() {
   test('Token returned', !!token, token ? `Token length: ${token.length}` : 'No token');
 
   const badLogin = await request('POST', '/api/auth/login', {
-    email: 'employee@attendance.local',
+    email: 'nobody@attendance.local',
     password: 'wrongpassword',
   });
   test('Login with wrong password fails', badLogin.status === 401, `Status: ${badLogin.status}`);
 
   console.log('\n3. Device Registration');
-
-  // Reset employee device first to ensure clean state
-  const { User } = require('../models');
-  const employee = await User.findOne({ where: { email: 'iftiyeamin06@gmail.com' } });
-  if (employee.boundDeviceId) {
-    employee.boundDeviceId = null;
-    await employee.save();
-    const cache = require('../redis/cache');
-    await cache.del(`bound_device:${employee.id}`);
-  }
 
   const deviceCheck = await request('GET', '/api/device/status', null, {
     Authorization: `Bearer ${token}`,
@@ -129,21 +142,17 @@ async function runTests() {
     `Status: ${clockInWrongDevice.status}, Message: ${clockInWrongDevice.body.message}`);
 
   console.log('\n5. Admin Panel');
-  const adminLogin = await request('POST', '/api/auth/login', {
-    email: 'admin@attendance.local',
-    password: 'admin123',
-  });
-  test('Admin login', adminLogin.status === 200 && adminLogin.body.user.role === 'admin',
-    `Role: ${adminLogin.body.user?.role}`);
-
-  const adminToken = adminLogin.body.token;
-  const adminId = adminLogin.body.user.id;
   const dashboard = await request('GET', '/api/admin/dashboard', null, {
     Authorization: `Bearer ${adminToken}`,
   });
   test('Admin dashboard accessible', dashboard.status === 200, `Status: ${dashboard.status}`);
 
   console.log('\n6. Settings');
+  const origOfficeIp = await request('GET', '/api/attendance/office-ip', null, {
+    Authorization: `Bearer ${token}`,
+  });
+  const officeIpBefore = origOfficeIp.body?.office_public_ip;
+
   const ipUpdate = await request(
     'POST',
     '/api/admin/settings/ip',
@@ -424,6 +433,41 @@ async function runTests() {
   });
   test('Cleanup: manual punch deleted', delPunch.status === 200, `Status: ${delPunch.status}`);
 
+  const chopNoOut = await request('POST', '/api/admin/attendance/punch', {
+    user_id: employee.id,
+    shift_date: dateStr,
+    clock_in: '09:15',
+    status: 'PRESENT',
+    reason: 'test no clock-out',
+  }, { Authorization: `Bearer ${adminToken}` });
+  test('PRESENT manual punch without clock-out blocked',
+    chopNoOut.status === 400,
+    `Status: ${chopNoOut.status}, Message: ${chopNoOut.body.message}`);
+
+  const chopAbsent = await request('POST', '/api/admin/attendance/punch', {
+    user_id: employee.id,
+    shift_date: dateStr,
+    status: 'ABSENT',
+    reason: 'test absent correction',
+  }, { Authorization: `Bearer ${adminToken}` });
+  const chopAbsentId = chopAbsent.body.data?.id;
+  test('ABSENT manual punch without times allowed',
+    (chopAbsent.status === 200 || chopAbsent.status === 201) && !!chopAbsentId && chopAbsent.body.data?.manual_status === 'ABSENT',
+    `Status: ${chopAbsent.status}, Data: ${JSON.stringify(chopAbsent.body.data)}`);
+
+  const chopEditToPresent = await request('PUT', `/api/admin/attendance/logs/${chopAbsentId}`, {
+    status: 'PRESENT',
+    reason: 'test edit without times',
+  }, { Authorization: `Bearer ${adminToken}` });
+  test('Edit to PRESENT without times blocked',
+    chopEditToPresent.status === 400,
+    `Status: ${chopEditToPresent.status}, Message: ${chopEditToPresent.body.message}`);
+
+  const delChopAbsent = await request('DELETE', `/api/admin/attendance/logs/${chopAbsentId}`, null, {
+    Authorization: `Bearer ${adminToken}`,
+  });
+  test('Cleanup: absent test punch deleted', delChopAbsent.status === 200, `Status: ${delChopAbsent.status}`);
+
   console.log('\n13. Password Reset & Account Security\n');
 
   const pwEmail = `pwtest.${Date.now()}@attendance.local`;
@@ -545,6 +589,24 @@ async function runTests() {
     Authorization: `Bearer ${adminToken}`,
   });
   test('Cleanup: temp employee deleted', pwCleanup.status === 200, `Status: ${pwCleanup.status}`);
+
+  console.log('\n13b. Fixture Cleanup\n');
+  if (officeIpBefore) {
+    const ipRestore = await request(
+      'POST',
+      '/api/admin/settings/ip',
+      { office_public_ip: officeIpBefore },
+      { Authorization: `Bearer ${adminToken}` }
+    );
+    test('Restore original office IP', ipRestore.status === 200, `Status: ${ipRestore.status}, IP: ${officeIpBefore}`);
+  } else {
+    test('Restore original office IP', true, 'No previous IP found');
+  }
+
+  const delE2e = await request('DELETE', `/api/admin/users/${employee.id}`, null, {
+    Authorization: `Bearer ${adminToken}`,
+  });
+  test('Cleanup: E2E test employee deleted', delE2e.status === 200, `Status: ${delE2e.status}`);
 
   console.log('\n--- Test Summary ---\n');
   const passed = results.filter((r) => r.status === 'PASS').length;

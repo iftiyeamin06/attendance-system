@@ -19,24 +19,21 @@ async function clockIn(req, res) {
 
     const shiftDate = computeShiftDate(new Date());
 
-    const leaveCheck = await AttendanceLog.findOne({
+    const todayLeave = await Leave.findOne({
       where: {
         userId: user.id,
-        status: 'ON_LEAVE',
-        createdAt: {
-          [Op.gte]: new Date(today.getTime() - 24 * 60 * 60 * 1000)
-        }
+        leaveType: { [Op.ne]: 'partial' },
+        status: 'Approved',
+        startDate: { [Op.lte]: todayStr },
+        endDate: { [Op.gte]: todayStr },
       },
     });
 
-    if (leaveCheck) {
-      const logDate = localDateStr(leaveCheck.createdAt);
-      if (logDate === todayStr) {
-        return res.status(400).json({
-          success: false,
-          message: 'You are currently marked as On Leave today.',
-        });
-      }
+    if (todayLeave) {
+      return res.status(400).json({
+        success: false,
+        message: 'You are currently marked as On Leave today.',
+      });
     }
 
     const activeLog = await AttendanceLog.findOne({
@@ -44,6 +41,7 @@ async function clockIn(req, res) {
         userId: user.id,
         status: 'VERIFIED',
         clockOutTime: null,
+        isManual: { [Op.ne]: true },
       },
       order: [['clockInTime', 'DESC']],
     });
@@ -102,6 +100,7 @@ async function clockOut(req, res) {
         userId: user.id,
         status: 'VERIFIED',
         clockOutTime: null,
+        isManual: { [Op.ne]: true },
       },
       order: [['clockInTime', 'DESC']],
     });
@@ -183,13 +182,24 @@ async function getTodayStatus(req, res) {
       order: [['createdAt', 'DESC']],
     });
 
-    const isOnLeave = onLeaveLog && localDateStr(onLeaveLog.createdAt) === todayStr;
+    const todayLeave = await Leave.findOne({
+      where: {
+        userId: user.id,
+        leaveType: { [Op.ne]: 'partial' },
+        status: 'Approved',
+        startDate: { [Op.lte]: todayStr },
+        endDate: { [Op.gte]: todayStr },
+      },
+    });
+
+    const isOnLeave = !!todayLeave;
 
     const activeLog = isOnLeave ? onLeaveLog : await AttendanceLog.findOne({
       where: {
         userId: user.id,
         status: 'VERIFIED',
         clockOutTime: null,
+        isManual: { [Op.ne]: true },
       },
       order: [['clockInTime', 'DESC']],
     });
