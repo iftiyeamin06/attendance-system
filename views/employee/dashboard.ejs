@@ -46,7 +46,7 @@
             <div class="flex items-center justify-between mb-5">
                 <div>
                     <h2 class="text-sm font-bold text-slate-900 tracking-tight">Shift Control</h2>
-                    <p class="text-xs text-slate-400 mt-0.5">Clock in to start your shift, clock out when finished.</p>
+                    <p class="text-xs text-slate-400 mt-0.5">Time in to start your shift, time out when finished.</p>
                 </div>
                 <span class="text-xs font-semibold text-slate-400 bg-slate-50 border border-slate-200 px-3 py-1 rounded-full">Today</span>
             </div>
@@ -56,7 +56,7 @@
                     class="group bg-emerald-600 hover:bg-emerald-700 text-white font-bold p-5 rounded-xl shadow-sm transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-600 flex items-center justify-between text-left">
                     <div>
                         <span class="text-[11px] font-semibold text-emerald-100 uppercase tracking-wider block mb-0.5">Start Shift</span>
-                        <span class="text-lg font-extrabold tracking-tight">Clock In</span>
+                        <span class="text-lg font-extrabold tracking-tight">Time In</span>
                     </div>
                     <div class="w-10 h-10 bg-white/15 rounded-lg flex items-center justify-center text-white text-base group-hover:scale-110 transition-transform">
                         <i class="fa-solid fa-play"></i>
@@ -67,7 +67,7 @@
                     class="group bg-white border border-slate-200 text-slate-700 font-bold p-5 rounded-xl shadow-sm transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white hover:border-slate-300 flex items-center justify-between text-left">
                     <div>
                         <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-0.5">End Shift</span>
-                        <span class="text-lg font-extrabold tracking-tight">Clock Out</span>
+                        <span class="text-lg font-extrabold tracking-tight">Time Out</span>
                     </div>
                     <div class="w-10 h-10 bg-slate-100 group-hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-600 text-base group-hover:scale-110 transition-transform">
                         <i class="fa-solid fa-stop"></i>
@@ -81,7 +81,7 @@
             <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
                 <div>
                     <h2 class="text-sm font-bold text-slate-900 tracking-tight">Recent Attendance</h2>
-                    <p class="text-xs text-slate-400 mt-0.5">Your latest clock-in and clock-out records</p>
+                    <p class="text-xs text-slate-400 mt-0.5">Your latest time-in and time-out records</p>
                 </div>
                 <span class="text-xs font-semibold text-slate-400">Last 10 records</span>
             </div>
@@ -91,8 +91,8 @@
                     <thead class="text-[11px] uppercase tracking-wider font-semibold text-slate-400 border-b border-slate-100">
                         <tr>
                             <th class="py-3 px-6">Date</th>
-                            <th class="py-3 px-4">Clock In</th>
-                            <th class="py-3 px-4">Clock Out</th>
+                            <th class="py-3 px-4">Time In</th>
+                            <th class="py-3 px-4">Time Out</th>
                             <th class="py-3 px-4">Status</th>
                         </tr>
                     </thead>
@@ -222,7 +222,7 @@
                                 <span class="badge-pill badge-leave"><span class="badge-dot"></span>ON LEAVE</span>
                                 <span class="text-xs font-semibold text-blue-600">Full Day Approved Leave</span>
                             </div>
-                            <p class="text-xs text-slate-500 font-medium mt-2">You are registered as on leave today. Clock in is paused.</p>
+                            <p class="text-xs text-slate-500 font-medium mt-2">You are registered as on leave today. Time in is paused.</p>
                         </div>
                     `;
                     document.getElementById('clock-in-btn').disabled = true;
@@ -241,11 +241,11 @@
                             </div>
                             <div class="grid grid-cols-2 gap-4 bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
                                 <div>
-                                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Clock In</span>
+                                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Time In</span>
                                     <p class="${data.is_late ? 'text-amber-600' : 'text-slate-900'} font-extrabold text-sm mt-0.5">${formatDhakaTime(data.clock_in_time)}</p>
                                 </div>
                                 <div>
-                                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Clock Out</span>
+                                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Time Out</span>
                                     <p class="text-slate-900 font-extrabold text-sm mt-0.5">${formatDhakaTime(data.clock_out_time)}</p>
                                 </div>
                             </div>
@@ -264,7 +264,7 @@
                     container.innerHTML = `
                         <div class="w-full space-y-2">
                            
-                            <p class="text-xs text-slate-500 font-medium mt-1">Clocked in at <b class="text-slate-800">${formatDhakaTime(data.clock_in_time)}</b></p>
+                            <p class="text-xs text-slate-500 font-medium mt-1">Timed in at <b class="text-slate-800">${formatDhakaTime(data.clock_in_time)}</b></p>
                         </div>
                     `;
                     document.getElementById('clock-in-btn').disabled = true;
@@ -317,7 +317,7 @@
                     const statusChip = logStatus === 'ON_LEAVE'
                         ? `<span class="status-chip status-chip-blue"><span class="badge-dot" style="background-color:#3b82f6"></span>On Leave</span>`
                         : log.clockOutTime
-                        ? `<span class="status-chip status-chip-gray"><span class="badge-dot" style="background-color:#94a3b8"></span>Clocked Out</span>`
+                        ? `<span class="status-chip status-chip-gray"><span class="badge-dot" style="background-color:#94a3b8"></span>Timed Out</span>`
                         : `<span class="status-chip status-chip-green"><span class="badge-dot"></span>Active</span>`;
                     return `
                         <tr class="hover:bg-slate-50/70 transition-colors">
@@ -377,10 +377,10 @@
                     if (returnedUuid) {
                         localStorage.setItem('deviceId', returnedUuid);
                     }
-                    showMessage('Clock-in recorded successfully!', 'success');
+                    showMessage('Time-in recorded successfully!', 'success');
                     renderTodayStatus();
                 } else {
-                    showMessage(data.message || 'Clock-in failed', 'error');
+                    showMessage(data.message || 'Time-in failed', 'error');
                 }
             } catch (err) {
                 showMessage('Network error. Please try again.', 'error');
@@ -399,10 +399,10 @@
                 });
                 const data = await response.json();
                 if (data.success) {
-                    showMessage('Clock-out recorded successfully!', 'success');
+                    showMessage('Time-out recorded successfully!', 'success');
                     renderTodayStatus();
                 } else {
-                    showMessage(data.message || 'Clock-out failed', 'error');
+                    showMessage(data.message || 'Time-out failed', 'error');
                 }
             } catch (err) {
                 showMessage('Network error. Please try again.', 'error');

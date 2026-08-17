@@ -23,6 +23,8 @@ router.post('/users/:userId/reset-password', adminController.resetUserPassword);
 router.get('/employee/:userId/summary', adminController.getEmployeeMonthlySummary);
 router.get('/report/summary', adminController.getAllEmployeesMonthlySummary);
 router.get('/report/export', adminController.exportMonthlyReportCsv);
+router.get('/report/daily', adminController.getDailyReport);
+router.get('/report/daily/export', adminController.exportDailyReportCsv);
 router.post('/settings/ip', adminController.updateOfficeIp);
 router.post('/settings/office-time', adminController.updateOfficeTime);
 router.get('/settings/office-time', adminController.getOfficeTime);

@@ -87,13 +87,24 @@ function currentDateInputValue(timeZone = ATTENDANCE_TIME_ZONE) {
 // in the attendance time zone) at the given local wall-clock hour:minute.
 // This is a timezone-aware replacement for Date.UTC(...) which would otherwise
 // misinterpret the shift date as UTC.
-function deadlineEpoch(shiftDateStr, hour, minute, timeZone = ATTENDANCE_TIME_ZONE) {
+function deadlineEpoch(shiftDateStr, hour, minute, second = 0, timeZone = ATTENDANCE_TIME_ZONE) {
   const [Y, M, D] = shiftDateStr.split('-').map(Number);
   const probe = new Date(Date.UTC(Y, M - 1, D, 12, 0, 0));
   const parts = getZonedDateParts(probe, timeZone);
   const wallMs = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
   const offsetMs = wallMs - probe.getTime();
-  return Date.UTC(Y, M - 1, D, hour, minute, 0) - offsetMs;
+  return Date.UTC(Y, M - 1, D, hour, minute, second) - offsetMs;
+}
+
+// Return the [start, end] UTC Date range covering the entire calendar day in the
+// attendance time zone that contains the given date. This is timezone-aware,
+// unlike new Date(date).setHours(0,0,0,0) which uses the process-local timezone.
+function zonedDayRange(date, timeZone = ATTENDANCE_TIME_ZONE) {
+  const { year, month, day } = getZonedDateParts(date, timeZone);
+  const dateStr = formatYmd(year, month, day);
+  const start = new Date(deadlineEpoch(dateStr, 0, 0, 0, timeZone));
+  const end = new Date(deadlineEpoch(dateStr, 23, 59, 59, timeZone) + 999);
+  return { start, end };
 }
 
 function computeShiftDate(date) {
@@ -120,4 +131,5 @@ module.exports = {
   currentDateInputValue,
   computeShiftDate,
   deadlineEpoch,
+  zonedDayRange,
 };

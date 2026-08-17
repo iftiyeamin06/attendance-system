@@ -3,7 +3,7 @@ const cache = require('../redis/cache');
 const { extractClientIp } = require('../middleware/ipValidation');
 const { getOfficeTimes } = require('./leaveController');
 const { Op } = require('sequelize');
-const { localDateStr, computeShiftDate, deadlineEpoch } = require('../utils/date');
+const { localDateStr, computeShiftDate, deadlineEpoch, zonedDayRange } = require('../utils/date');
 
 async function clockIn(req, res) {
   try {
@@ -124,7 +124,7 @@ async function clockOut(req, res) {
     log.clockOutTime = new Date();
     await log.save();
 
-    await cache.del(`daily_summary:${shiftDateFor(log)}`);
+    await cache.del(`daily_summary:${localDateStr(new Date(log.clockInTime))}`);
 
     const workedMs = new Date(log.clockOutTime) - new Date(log.clockInTime);
     const workedMinutes = Math.floor(workedMs / 60000);
@@ -155,12 +155,6 @@ async function clockOut(req, res) {
   }
 }
 
-function shiftDateFor(log) {
-  if (log.shiftDate) return log.shiftDate;
-  const d = new Date(log.clockInTime || new Date());
-  return computeShiftDate(d);
-}
-
 function calculateDuration(clockIn, clockOut) {
   const diffMs = new Date(clockOut) - new Date(clockIn);
   const hours = Math.floor(diffMs / 3600000);
@@ -175,6 +169,7 @@ async function getTodayStatus(req, res) {
     today.setHours(0, 0, 0, 0);
 
     const todayStr = localDateStr(today);
+    const { start: todayStart, end: todayEnd } = zonedDayRange(new Date());
 
     const onLeaveLog = await AttendanceLog.findOne({
       where: {
@@ -213,8 +208,8 @@ async function getTodayStatus(req, res) {
           { shiftDate: todayStr },
           {
             clockInTime: {
-              [Op.gte]: today,
-              [Op.lte]: new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1),
+              [Op.gte]: todayStart,
+              [Op.lte]: todayEnd,
             },
           },
         ],
@@ -313,10 +308,7 @@ async function getAttendanceLogs(req, res) {
     const where = { userId: user.id };
 
     if (date) {
-      const dayStart = new Date(date);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(date);
-      dayEnd.setHours(23, 59, 59, 999);
+      const { start: dayStart, end: dayEnd } = zonedDayRange(new Date(date));
       where.clockInTime = {
         [Op.gte]: dayStart,
         [Op.lte]: dayEnd,

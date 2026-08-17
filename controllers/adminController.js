@@ -11,6 +11,7 @@ const {
   formatWeekday,
   formatMonthLabel,
   deadlineEpoch,
+  zonedDayRange,
 } = require('../utils/date');
 
 function calculateDuration(clockIn, clockOut) {
@@ -255,10 +256,7 @@ async function adminDashboard(req, res) {
     const today = new Date();
     const targetDate = date ? new Date(date) : today;
     const todayStr = localDateStr(targetDate);
-    const dayStart = new Date(targetDate);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(targetDate);
-    dayEnd.setHours(23, 59, 59, 999);
+    const { start: dayStart, end: dayEnd } = zonedDayRange(targetDate);
 
     const cacheKey = `daily_summary:${todayStr}`;
     let dailyLogs = refresh === 'true' ? null : await cache.get(cacheKey);
@@ -1498,6 +1496,169 @@ const partialLeaves = leaves.filter(l => l.leaveType === 'partial');
   }
 }
 
+function isDhakaWeekend(dateStr) {
+  const noon = new Date(deadlineEpoch(dateStr, 12, 0));
+  const wd = formatWeekday(noon);
+  return wd === 'Saturday' || wd === 'Sunday';
+}
+
+function leaveLabel(type) {
+  if (type === 'partial') return 'Partial Leave';
+  return `${type.charAt(0).toUpperCase()}${type.slice(1)} Leave`;
+}
+
+async function buildDailyReportData(dateStr) {
+  const targetDate = dateStr ? new Date(dateStr) : new Date();
+  const todayStr = localDateStr(targetDate);
+  const { start: dayStart, end: dayEnd } = zonedDayRange(targetDate);
+
+  const officeTimes = await (require('./leaveController')).getOfficeTimes();
+  const officeStartTime = officeTimes.start;
+  const [startH, startM] = officeStartTime.split(':').map(Number);
+  const graceSetting = await Setting.findOne({ where: { key: 'grace_period_minutes' } });
+  const graceMinutes = graceSetting ? parseInt(graceSetting.value) : 10;
+
+  const employees = await User.findAll({
+    where: { role: 'employee' },
+    attributes: ['id', 'name', 'email'],
+    order: [['name', 'ASC']],
+  });
+
+  const logs = await AttendanceLog.findAll({
+    where: {
+      userId: { [Op.in]: employees.map(e => e.id) },
+      [Op.or]: [
+        { clockInTime: { [Op.gte]: dayStart, [Op.lte]: dayEnd } },
+        { shiftDate: todayStr },
+      ],
+    },
+    order: [['clockInTime', 'ASC']],
+  });
+
+  const leaves = await Leave.findAll({
+    where: {
+      userId: { [Op.in]: employees.map(e => e.id) },
+      status: 'Approved',
+      startDate: { [Op.lte]: todayStr },
+      endDate: { [Op.gte]: todayStr },
+    },
+  });
+
+  const holidays = await Holiday.findAll({ where: { date: todayStr } });
+  const isHoliday = holidays.length > 0;
+  const isWeekend = isDhakaWeekend(todayStr);
+
+  const deadline = new Date(deadlineEpoch(todayStr, startH, startM + graceMinutes));
+  const logByUser = new Map(logs.map(l => [l.userId, l]));
+  const leaveByUser = new Map();
+  leaves.forEach(l => { if (!leaveByUser.has(l.userId)) leaveByUser.set(l.userId, l); });
+
+  const rows = employees.map(emp => {
+    const log = logByUser.get(emp.id);
+    const leave = leaveByUser.get(emp.id);
+
+    let status = 'ABSENT';
+    let leaveType = null;
+    let clockIn = null;
+    let clockOut = null;
+    let duration = null;
+    let isLate = false;
+    let lateMinutes = 0;
+
+    if (isHoliday) {
+      status = 'HOLIDAY';
+    } else if (isWeekend) {
+      status = 'WEEKEND';
+    } else if (leave) {
+      status = leave.leaveType === 'partial' ? 'PARTIAL_LEAVE' : 'ON_LEAVE';
+      leaveType = leave.leaveType;
+    } else if (log) {
+      clockIn = log.clockInTime;
+      clockOut = log.clockOutTime;
+      if (clockIn && clockOut) duration = calculateDuration(clockIn, clockOut);
+
+      if (log.manualStatus === 'PRESENT') {
+        status = 'VERIFIED';
+      } else if (log.manualStatus === 'LATE') {
+        status = 'VERIFIED';
+        isLate = true;
+      } else if (log.manualStatus === 'ABSENT') {
+        status = 'ABSENT';
+      } else {
+        status = log.status === 'REJECTED' ? 'REJECTED' : 'VERIFIED';
+        if (clockIn) {
+          const clockInDate = new Date(clockIn);
+          isLate = clockInDate > deadline;
+          lateMinutes = isLate ? Math.floor((clockInDate - deadline) / 60000) : 0;
+        }
+      }
+    }
+
+    return {
+      id: emp.id,
+      name: emp.name,
+      email: emp.email,
+      status,
+      leave_type: leaveType,
+      leave_label: leaveType ? leaveLabel(leaveType) : null,
+      clock_in_time: clockIn,
+      clock_out_time: clockOut,
+      duration,
+      is_late: isLate,
+      late_minutes: lateMinutes,
+    };
+  });
+
+  const kpi = {
+    present: rows.filter(r => r.status === 'VERIFIED' && !r.is_late).length,
+    late: rows.filter(r => r.is_late).length,
+    absent: rows.filter(r => r.status === 'ABSENT').length,
+    on_leave: rows.filter(r => r.status === 'ON_LEAVE').length,
+    partial_leave: rows.filter(r => r.status === 'PARTIAL_LEAVE').length,
+    holiday: rows.filter(r => r.status === 'HOLIDAY').length,
+    weekend: rows.filter(r => r.status === 'WEEKEND').length,
+  };
+
+  return { todayStr, rows, kpi, officeStartTime };
+}
+
+async function getDailyReport(req, res) {
+  try {
+    const { date } = req.query;
+    const data = await buildDailyReportData(date);
+    return res.json({ success: true, data: { ...data, date: data.todayStr } });
+  } catch (err) {
+    console.error('Get daily report error:', err);
+    return res.status(500).json({ success: false, message: 'An error occurred.' });
+  }
+}
+
+async function exportDailyReportCsv(req, res) {
+  try {
+    const { date } = req.query;
+    const { todayStr, rows } = await buildDailyReportData(date);
+
+    const csvData = rows.map(r => ({
+      Employee: r.name,
+      Email: r.email,
+      Status: r.status,
+      'Leave Type': r.leave_label || '',
+      'Clock In': r.clock_in_time ? formatTime(r.clock_in_time) : '',
+      'Clock Out': r.clock_out_time ? formatTime(r.clock_out_time) : '',
+      Duration: r.duration || '',
+      Late: r.is_late ? `${r.late_minutes}m` : 'No',
+    }));
+
+    const csv = new Parser().parse(csvData);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="daily_report_${todayStr}.csv"`);
+    return res.send(csv);
+  } catch (err) {
+    console.error('Export daily report CSV error:', err);
+    return res.status(500).json({ success: false, message: 'An error occurred.' });
+  }
+}
+
 module.exports = {
   adminDashboard,
   getAllUsers,
@@ -1514,6 +1675,8 @@ module.exports = {
   deleteUser,
   getAllEmployeesMonthlySummary,
   exportMonthlyReportCsv,
+  getDailyReport,
+  exportDailyReportCsv,
   addManualPunch,
   editAttendanceLog,
   deleteAttendanceLog,
