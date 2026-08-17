@@ -27,7 +27,6 @@ async function seed() {
           email: emp.email,
           password: await bcrypt.hash(emp.password, saltRounds),
           role: 'employee',
-          boundDeviceId: `device_${emp.name.toLowerCase().replace(/\s/g, '-')}_${Date.now()}`,
         });
         console.log(`Created: ${emp.name} (${emp.email})`);
       } else {
@@ -83,10 +82,11 @@ async function seed() {
 
         // Random device
         const devices = [
-          user.boundDeviceId,
           `device_${user.id.substring(0, 8)}_${Date.now()}`,
+          'device_seed_iphone',
+          'device_seed_android',
         ];
-        const device = devices[0]; // Use bound device
+        const device = devices[0]; // Use seed device
 
         // Status (90% VERIFIED, 10% REJECTED)
         const status = Math.random() > 0.1 ? 'VERIFIED' : 'REJECTED';
