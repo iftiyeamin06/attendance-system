@@ -46,14 +46,33 @@ async function clockIn(req, res) {
       order: [['clockInTime', 'DESC']],
     });
 
+    let autoClosedLog = null;
     if (activeLog) {
-      return res.status(409).json({
-        success: false,
-        message: 'You already have an active clock-in. Please clock out before starting a new shift.',
-        log_id: activeLog.id,
-        clock_in_time: activeLog.clockInTime,
-        shift_date: activeLog.shiftDate,
-      });
+      const activeShift = activeLog.shiftDate || computeShiftDate(new Date(activeLog.clockInTime));
+
+      if (activeShift === shiftDate) {
+        return res.status(409).json({
+          success: false,
+          message: 'You already have an active clock-in. Please clock out before starting a new shift.',
+          log_id: activeLog.id,
+          clock_in_time: activeLog.clockInTime,
+          shift_date: activeLog.shiftDate,
+        });
+      }
+
+      // Stale open log from a previous shift: auto-close it at that shift's end
+      // time (or now if the shift end is still in the future) so a new clock-in
+      // is allowed.
+      const officeTimes = await getOfficeTimes();
+      const [endH, endM] = officeTimes.end.split(':').map(Number);
+      const prevShiftEnd = Number.isInteger(endH) && Number.isInteger(endM)
+        ? new Date(deadlineEpoch(activeShift, endH, endM))
+        : new Date();
+
+      activeLog.clockOutTime = prevShiftEnd.getTime() < Date.now() ? prevShiftEnd : new Date();
+      await activeLog.save();
+      autoClosedLog = activeLog;
+      await cache.del(`daily_summary:${activeShift}`);
     }
 
     const log = await AttendanceLog.create({
@@ -76,6 +95,14 @@ async function clockIn(req, res) {
         ip_address: log.ipAddress,
         device_id: log.deviceIdUsed,
         device_trust: req.deviceValidationResult?.trustLevel || 'trusted',
+        auto_closed_log: autoClosedLog
+          ? {
+              log_id: autoClosedLog.id,
+              clock_in_time: autoClosedLog.clockInTime,
+              clock_out_time: autoClosedLog.clockOutTime,
+              shift_date: autoClosedLog.shiftDate,
+            }
+          : null,
       },
     });
   } catch (err) {
@@ -169,7 +196,7 @@ async function getTodayStatus(req, res) {
     today.setHours(0, 0, 0, 0);
 
     const todayStr = localDateStr(today);
-    const { start: todayStart, end: todayEnd } = zonedDayRange(new Date());
+    const targetShiftDate = computeShiftDate(new Date());
 
     const onLeaveLog = await AttendanceLog.findOne({
       where: {
@@ -204,15 +231,7 @@ async function getTodayStatus(req, res) {
     const log = activeLog || await AttendanceLog.findOne({
       where: {
         userId: user.id,
-        [Op.or]: [
-          { shiftDate: todayStr },
-          {
-            clockInTime: {
-              [Op.gte]: todayStart,
-              [Op.lte]: todayEnd,
-            },
-          },
-        ],
+        shiftDate: targetShiftDate,
       },
       order: [['clockInTime', 'DESC']],
     });
@@ -237,6 +256,7 @@ async function getTodayStatus(req, res) {
     if (!log) {
       return res.json({
         success: true,
+        status: 'NOT_CLOCKED_IN',
         clocked_in: false,
         on_leave: false,
         partial_leave: partialLeave
