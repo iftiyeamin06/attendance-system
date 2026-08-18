@@ -12,6 +12,7 @@ const {
   formatMonthLabel,
   deadlineEpoch,
   zonedDayRange,
+  computeShiftDate,
 } = require('../utils/date');
 
 function calculateDuration(clockIn, clockOut) {
@@ -314,8 +315,8 @@ async function adminDashboard(req, res) {
         let isLate = false;
         let lateMinutes = 0;
         if (clockInTime) {
-          const logDate = localDateStr(clockInTime);
-          const deadline = new Date(deadlineEpoch(logDate, startHour, startMin + graceMinutes));
+          const shiftDate = log.shiftDate || computeShiftDate(clockInTime);
+          const deadline = new Date(deadlineEpoch(shiftDate, startHour, startMin + graceMinutes));
           isLate = clockInTime > deadline;
           lateMinutes = isLate ? Math.floor((clockInTime - deadline) / 60000) : 0;
         }
@@ -1548,7 +1549,6 @@ async function buildDailyReportData(dateStr) {
   const isHoliday = holidays.length > 0;
   const isWeekend = isDhakaWeekend(todayStr);
 
-  const deadline = new Date(deadlineEpoch(todayStr, startH, startM + graceMinutes));
   const logByUser = new Map(logs.map(l => [l.userId, l]));
   const leaveByUser = new Map();
   leaves.forEach(l => { if (!leaveByUser.has(l.userId)) leaveByUser.set(l.userId, l); });
@@ -1588,8 +1588,10 @@ async function buildDailyReportData(dateStr) {
         status = log.status === 'REJECTED' ? 'REJECTED' : 'VERIFIED';
         if (clockIn) {
           const clockInDate = new Date(clockIn);
-          isLate = clockInDate > deadline;
-          lateMinutes = isLate ? Math.floor((clockInDate - deadline) / 60000) : 0;
+          const shiftDate = log.shiftDate || computeShiftDate(clockInDate);
+          const logDeadline = new Date(deadlineEpoch(shiftDate, startH, startM + graceMinutes));
+          isLate = clockInDate > logDeadline;
+          lateMinutes = isLate ? Math.floor((clockInDate - logDeadline) / 60000) : 0;
         }
       }
     }

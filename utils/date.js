@@ -87,6 +87,25 @@ function currentDateInputValue(timeZone = ATTENDANCE_TIME_ZONE) {
 // in the attendance time zone) at the given local wall-clock hour:minute.
 // This is a timezone-aware replacement for Date.UTC(...) which would otherwise
 // misinterpret the shift date as UTC.
+// Return the UTC epoch (ms) of a shift's end wall-clock time for a given
+// shiftDate string. For overnight shifts (end <= start) the shift ends on the
+// following calendar day, otherwise on the shiftDate itself.
+function shiftEndEpoch(shiftDateStr, startTime, endTime, timeZone = ATTENDANCE_TIME_ZONE) {
+  const [startHour, startMinute] = startTime.split(':').map(Number);
+  const [endHour, endMinute] = endTime.split(':').map(Number);
+  const endMs = endHour * 60 + endMinute;
+  const startMs = startHour * 60 + startMinute;
+  const overnight = endMs <= startMs;
+  const endDate = overnight ? addDaysToYmd(shiftDateStr, 1) : shiftDateStr;
+  return deadlineEpoch(endDate, endHour, endMinute, 0, timeZone);
+}
+
+function addDaysToYmd(ymd, days) {
+  const [Y, M, D] = ymd.split('-').map(Number);
+  const date = new Date(Date.UTC(Y, M - 1, D + days));
+  return formatYmd(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
+}
+
 function deadlineEpoch(shiftDateStr, hour, minute, second = 0, timeZone = ATTENDANCE_TIME_ZONE) {
   const [Y, M, D] = shiftDateStr.split('-').map(Number);
   const probe = new Date(Date.UTC(Y, M - 1, D, 12, 0, 0));
@@ -131,5 +150,6 @@ module.exports = {
   currentDateInputValue,
   computeShiftDate,
   deadlineEpoch,
+  shiftEndEpoch,
   zonedDayRange,
 };

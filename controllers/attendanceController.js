@@ -3,7 +3,7 @@ const cache = require('../redis/cache');
 const { extractClientIp } = require('../middleware/ipValidation');
 const { getOfficeTimes } = require('./leaveController');
 const { Op } = require('sequelize');
-const { localDateStr, computeShiftDate, deadlineEpoch, zonedDayRange } = require('../utils/date');
+const { localDateStr, computeShiftDate, deadlineEpoch, shiftEndEpoch, zonedDayRange } = require('../utils/date');
 
 async function clockIn(req, res) {
   try {
@@ -64,9 +64,10 @@ async function clockIn(req, res) {
       // time (or now if the shift end is still in the future) so a new clock-in
       // is allowed.
       const officeTimes = await getOfficeTimes();
+      const [startH, startM] = officeTimes.start.split(':').map(Number);
       const [endH, endM] = officeTimes.end.split(':').map(Number);
-      const prevShiftEnd = Number.isInteger(endH) && Number.isInteger(endM)
-        ? new Date(deadlineEpoch(activeShift, endH, endM))
+      const prevShiftEnd = Number.isInteger(endH) && Number.isInteger(endM) && Number.isInteger(startH) && Number.isInteger(startM)
+        ? new Date(shiftEndEpoch(activeShift, officeTimes.start, officeTimes.end))
         : new Date();
 
       activeLog.clockOutTime = prevShiftEnd.getTime() < Date.now() ? prevShiftEnd : new Date();
@@ -285,7 +286,8 @@ async function getTodayStatus(req, res) {
     }
 
     const clockIn = new Date(log.clockInTime);
-    const deadline = new Date(deadlineEpoch(localDateStr(new Date(clockIn)), startHour, startMin + graceMinutes));
+    const shiftDate = log.shiftDate || computeShiftDate(clockIn);
+    const deadline = new Date(deadlineEpoch(shiftDate, startHour, startMin + graceMinutes));
     const isLate = clockIn > deadline;
     const lateMinutes = isLate ? Math.floor((clockIn - deadline) / 60000) : 0;
 
