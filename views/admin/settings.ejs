@@ -12,73 +12,119 @@
             </div>
 
             <form id="settings-form" class="space-y-6">
-                <!-- IP Network Card -->
+                <!-- ============ TOP: ACTIVE CONFIGURATION ============ -->
                 <div class="surface-card p-6">
-                    <div class="flex items-center space-x-3 mb-4 pb-3 border-b border-slate-100">
-                        <i class="fa-solid fa-network-wired text-indigo-500 text-sm"></i>
-                        <h3 class="text-sm font-extrabold text-slate-900 uppercase tracking-wider">Network Restriction (Office Public IP)</h3>
+                    <!-- Card Header -->
+                    <div class="flex items-center space-x-3 mb-6 pb-4 border-b border-slate-100">
+                        <div class="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-bold">
+                            <i class="fa-solid fa-gear text-base"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-base font-extrabold text-slate-900">Active Configuration</h2>
+                            <p class="text-xs text-slate-500 font-medium">Network restriction, shift timing, and grace period</p>
+                        </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                        <div>
-                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Office Public IP Address</label>
-                            <div class="relative">
-                                <i class="fa-solid fa-globe absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                                <input type="text" id="office-ip-input"
-                                    class="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:border-indigo-500 focus:bg-white transition"
-                                    placeholder="e.g. 192.168.1.100">
+                    <!-- Network Restrictions -->
+                    <div class="mb-6">
+                        <div class="flex items-center space-x-2 mb-4">
+                            <i class="fa-solid fa-network-wired text-indigo-500 text-sm"></i>
+                            <h3 class="text-sm font-extrabold text-slate-900 uppercase tracking-wider">Network Restrictions</h3>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                            <div>
+                                <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Active IP Binding</label>
+                                <div class="relative">
+                                    <!-- View mode -->
+                                    <div id="ip-view" class="flex flex-wrap items-center gap-2">
+                                        <span id="current-ip" class="font-mono font-bold text-sm text-slate-700 bg-slate-100 border border-slate-200 px-3 py-2 rounded-lg">—</span>
+                                        <button type="button" onclick="toggleIpEdit(true)"
+                                            class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/60 px-3 py-2 rounded-lg text-xs font-bold transition flex items-center space-x-1.5">
+                                            <i class="fa-solid fa-pen text-[10px]"></i>
+                                            <span>Change IP</span>
+                                        </button>
+                                    </div>
+                                    <!-- Edit mode -->
+                                    <div id="ip-edit" class="hidden">
+                                        <div class="relative">
+                                            <i class="fa-solid fa-globe absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                            <input type="text" id="office-ip-input"
+                                                class="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+                                                placeholder="e.g. 192.168.1.100">
+                                        </div>
+                                        <div class="flex items-center gap-2 mt-2">
+                                            <button type="button" onclick="toggleIpEdit(false)"
+                                                class="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold px-3 py-1.5 rounded-lg text-xs transition">
+                                                Cancel
+                                            </button>
+                                            <span class="text-[11px] text-slate-400 font-medium">Save changes with the button below</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <p class="text-xs text-slate-400 mt-2 font-medium flex items-center space-x-1">
-                                <span>Active IP Binding:</span>
-                                <span id="current-ip" class="font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md"></span>
-                            </p>
+
+                            <div class="bg-slate-50 border border-slate-200/80 p-4 rounded-xl text-xs text-slate-500 space-y-1 font-medium">
+                                <p class="font-bold text-slate-800 flex items-center space-x-1">
+                                    <i class="fa-solid fa-shield-halved text-indigo-500 mr-1"></i>
+                                    <span>IP Verification Protocol</span>
+                                </p>
+                                <p>Clock ins outside this public IP will be flagged as remote/unauthorized unless IP bypass is configured.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="border-slate-100 mb-6">
+
+                    <!-- Shift Schedule & Grace Period -->
+                    <div>
+                        <div class="flex items-center space-x-2 mb-4">
+                            <i class="fa-solid fa-clock text-indigo-500 text-sm"></i>
+                            <h3 class="text-sm font-extrabold text-slate-900 uppercase tracking-wider">Shift Schedule & Grace Period</h3>
                         </div>
 
-                        <div class="bg-slate-50 border border-slate-200/80 p-4 rounded-xl text-xs text-slate-500 space-y-1 font-medium">
-                            <p class="font-bold text-slate-800 flex items-center space-x-1">
-                                <i class="fa-solid fa-shield-halved text-indigo-500 mr-1"></i>
-                                <span>IP Verification Protocol</span>
-                            </p>
-                            <p>Clock ins outside this public IP will be flagged as remote/unauthorized unless IP bypass is configured.</p>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div>
+                                <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Shift Start Time</label>
+                                <input type="time" id="office-start-time"
+                                    class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                            </div>
+
+                            <div>
+                                <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Shift End Time</label>
+                                <input type="time" id="office-end-time"
+                                    class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                            </div>
+
+                            <div>
+                                <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Grace Period (Minutes)</label>
+                                <input type="number" id="grace-period" min="0" max="60"
+                                    class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                            </div>
                         </div>
+                    </div>
+
+                    <!-- Save Bar -->
+                    <div class="flex justify-end mt-6 pt-5 border-t border-slate-100">
+                        <button type="submit"
+                            class="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-8 py-3 rounded-xl text-sm transition shadow-sm flex items-center space-x-2">
+                            <i class="fa-solid fa-floppy-disk"></i>
+                            <span>Save Configuration Settings</span>
+                        </button>
                     </div>
                 </div>
 
-                <!-- Shift Hours & Grace Period Card -->
+                <!-- ============ MIDDLE: HOLIDAY CALENDAR MANAGEMENT ============ -->
                 <div class="surface-card p-6">
-                    <div class="flex items-center space-x-3 mb-4 pb-3 border-b border-slate-100">
-                        <i class="fa-solid fa-clock text-indigo-500 text-sm"></i>
-                        <h3 class="text-sm font-extrabold text-slate-900 uppercase tracking-wider">Shift Schedule & Late Grace Period</h3>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div>
-                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Shift Start Time</label>
-                            <input type="time" id="office-start-time"
-                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                    <div class="flex items-center space-x-3 mb-5 pb-4 border-b border-slate-100">
+                        <div class="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-bold">
+                            <i class="fa-solid fa-calendar-days text-base"></i>
                         </div>
-
                         <div>
-                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Shift End Time</label>
-                            <input type="time" id="office-end-time"
-                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition">
-                        </div>
-
-                        <div>
-                            <label class="block text-slate-700 text-xs font-bold uppercase tracking-wider mb-2">Grace Period (Minutes)</label>
-                            <input type="number" id="grace-period" min="0" max="60"
-                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                            <h2 class="text-base font-extrabold text-slate-900">Holiday Calendar</h2>
+                            <p class="text-xs text-slate-500 font-medium">Add public holidays so employees are not marked ABSENT on those dates.</p>
                         </div>
                     </div>
-                </div>
-
-                <!-- Holiday Calendar Card -->
-                <div class="surface-card p-6">
-                    <div class="flex items-center space-x-3 mb-4 pb-3 border-b border-slate-100">
-                        <i class="fa-solid fa-calendar-days text-indigo-500 text-sm"></i>
-                        <h3 class="text-sm font-extrabold text-slate-900 uppercase tracking-wider">Holiday Calendar</h3>
-                    </div>
-                    <p class="text-xs text-slate-500 font-medium mb-4">Add public holidays so employees are not marked ABSENT on those dates.</p>
 
                     <div class="grid grid-cols-1 md:grid-cols-[200px_1fr_auto] gap-4 items-end mb-5">
                         <div>
@@ -118,13 +164,15 @@
                     </div>
                 </div>
 
-                <!-- Audit Log Card -->
+                <!-- ============ BOTTOM: AUDIT LOG & SYSTEM STATUS ============ -->
                 <div class="surface-card p-6">
-                    <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 flex-wrap gap-3">
+                    <div class="flex items-center justify-between mb-5 pb-4 border-b border-slate-100 flex-wrap gap-3">
                         <div class="flex items-center space-x-3">
-                            <i class="fa-solid fa-clipboard-list text-indigo-500 text-sm"></i>
+                            <div class="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-bold">
+                                <i class="fa-solid fa-clipboard-list text-base"></i>
+                            </div>
                             <div>
-                                <h3 class="text-sm font-extrabold text-slate-900 uppercase tracking-wider">Audit Log</h3>
+                                <h2 class="text-base font-extrabold text-slate-900">Audit Log & System Status</h2>
                                 <p class="text-xs text-slate-400 font-medium mt-0.5">Sensitive admin actions are recorded automatically.</p>
                             </div>
                         </div>
@@ -173,21 +221,25 @@
                         <pre id="audit-detail-body" class="text-[11px] font-mono text-slate-600 bg-white border border-slate-200 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap"></pre>
                     </div>
                 </div>
-
-                <!-- Submit Button -->
-                <div class="flex justify-end">
-                    <button type="submit"
-                        class="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-8 py-3 rounded-xl text-sm transition shadow-sm flex items-center space-x-2">
-                        <i class="fa-solid fa-floppy-disk"></i>
-                        <span>Save Configuration Settings</span>
-                    </button>
-                </div>
             </form>
         </div>
 
 <%- include('partials/layout-footer') %>
 
     <script>
+        function toggleIpEdit(show) {
+            const view = document.getElementById('ip-view');
+            const edit = document.getElementById('ip-edit');
+            if (show) {
+                view.classList.add('hidden');
+                edit.classList.remove('hidden');
+                document.getElementById('office-ip-input').focus();
+            } else {
+                view.classList.remove('hidden');
+                edit.classList.add('hidden');
+            }
+        }
+
         async function loadSettings() {
             try {
                 const response = await fetchWithAuth(`${API_BASE}/admin/settings/office-time`);
@@ -252,8 +304,8 @@
                         <td class="py-2.5 px-3 font-mono font-semibold text-slate-700">${h.date}</td>
                         <td class="py-2.5 px-3 font-semibold text-slate-800">${h.name}</td>
                         <td class="py-2.5 px-3 text-right">
-                            <button class="delete-holiday-btn text-rose-500 hover:text-rose-700 text-sm font-semibold" data-id="${h.id}" data-name="${h.name}">
-                                Remove
+                            <button class="delete-holiday-btn w-8 h-8 inline-flex items-center justify-center bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 hover:border-rose-200 rounded-lg transition" data-id="${h.id}" data-name="${h.name}" title="Remove holiday">
+                                <i class="fa-regular fa-trash-can text-xs"></i>
                             </button>
                         </td>
                     </tr>
@@ -314,14 +366,18 @@
                             ? `<span class="text-[11px] font-mono text-slate-400">${l.details.params.leaveId || l.details.params.holidayId || l.details.params.logId}</span>`
                             : '<span class="text-slate-400 text-xs">—</span>';
                     const status = l.details && l.details.status;
-                    const statusColor = status < 300 ? 'text-emerald-600 bg-emerald-50' : status >= 500 ? 'text-rose-600 bg-rose-50' : 'text-amber-600 bg-amber-50';
+                    const statusColor = status < 300
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : status >= 400
+                            ? 'bg-rose-50 text-rose-700 border-rose-200'
+                            : 'bg-amber-50 text-amber-700 border-amber-200';
                     return `
                         <tr class="hover:bg-slate-50/70 cursor-pointer audit-row" data-index="${i}">
                             <td class="py-2.5 px-3 text-xs font-semibold text-slate-600 whitespace-nowrap">${time}</td>
                             <td class="py-2.5 px-3 text-xs font-bold text-slate-800">${adminName}</td>
                             <td class="py-2.5 px-3"><span class="font-mono text-[11px] font-semibold text-indigo-600 bg-indigo-50 rounded-md px-2 py-1">${l.action}</span></td>
                             <td class="py-2.5 px-3 text-xs font-semibold text-slate-700">${target}</td>
-                            <td class="py-2.5 px-3"><span class="inline-block text-[11px] font-bold rounded-md px-2 py-1 ${statusColor}">${status}</span></td>
+                            <td class="py-2.5 px-3"><span class="inline-block text-[11px] font-bold rounded-md px-2 py-1 border ${statusColor}">${status}</span></td>
                             <td class="py-2.5 px-3 text-right"><i class="fa-solid fa-chevron-down text-slate-300 text-xs"></i></td>
                         </tr>
                     `;
