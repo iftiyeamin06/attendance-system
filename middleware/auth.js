@@ -40,4 +40,18 @@ async function authMiddleware(req, res, next) {
   }
 }
 
+function superAdminMiddleware(req, res, next) {
+  const user = req.user;
+
+  if (!user || user.role !== 'superadmin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Forbidden. Super Admin access required.',
+    });
+  }
+
+  next();
+}
+
 module.exports = authMiddleware;
+module.exports.superAdminMiddleware = superAdminMiddleware;

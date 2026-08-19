@@ -284,7 +284,7 @@
             try {
                 const response = await fetchWithAuth(`${API_BASE}/admin/users`);
                 const data = await response.json();
-                const employees = data.data.filter(u => u.role !== 'admin');
+                const employees = data.data.filter(u => u.role === 'employee');
                 const select = document.getElementById('leave-employee');
                 select.innerHTML = employees.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
             } catch (err) { console.error(err); }

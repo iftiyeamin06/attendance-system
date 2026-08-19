@@ -1,7 +1,7 @@
 function adminMiddleware(req, res, next) {
   const user = req.user;
 
-  if (!user || user.role !== 'admin') {
+  if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
     return res.status(403).json({
       success: false,
       message: 'Forbidden. Admin access required.',

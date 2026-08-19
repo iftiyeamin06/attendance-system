@@ -10,6 +10,14 @@ async function resetDatabase() {
     const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
     const adminPassword = await bcrypt.hash('admin123', saltRounds);
     const employeePassword = await bcrypt.hash('employee123', saltRounds);
+    const superAdminPassword = await bcrypt.hash('Superadmin#2026', saltRounds);
+
+    await User.create({
+      name: 'System Super Administrator',
+      email: 'superadmin@attendance.local',
+      password: superAdminPassword,
+      role: 'superadmin',
+    });
 
     await User.create({
       name: 'System Administrator',
@@ -31,6 +39,7 @@ async function resetDatabase() {
     });
 
     console.log('Test users created:');
+    console.log('  Super Admin: superadmin@attendance.local / Superadmin#2026');
     console.log('  Admin: admin@attendance.local / admin123');
     console.log('  Employee: employee@attendance.local / employee123');
 

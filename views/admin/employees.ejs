@@ -527,7 +527,9 @@
                 employeesTable.innerHTML = data.data.map(emp => {
                     const initial = (emp.name || 'U').charAt(0).toUpperCase();
                     const isBound = !!emp.bound_device_id;
-                    const roleBadge = emp.role === 'admin'
+                    const roleBadge = emp.role === 'superadmin'
+                        ? `<span class="px-2.5 py-1 text-xs font-bold rounded-lg bg-rose-50 text-rose-700 border border-rose-200/60 inline-flex items-center space-x-1"><i class="fa-solid fa-crown text-[10px]"></i><span>Super Admin</span></span>`
+                        : emp.role === 'admin'
                         ? `<span class="px-2.5 py-1 text-xs font-bold rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200/60 inline-flex items-center space-x-1"><i class="fa-solid fa-shield-halved text-[10px]"></i><span>Admin</span></span>`
                         : `<span class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 text-slate-600 border border-slate-200">Employee</span>`;
 
@@ -539,7 +541,7 @@
                     <tr class="hover:bg-slate-50/80 transition-colors">
                         <td class="py-3.5 px-6">
                             <div class="flex items-center space-x-3">
-                                <div class="w-8 h-8 ${emp.role === 'admin' ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-700'} rounded-full flex items-center justify-center font-bold text-xs shadow-2xs">
+                                <div class="w-8 h-8 ${emp.role === 'superadmin' ? 'bg-rose-600 text-white' : emp.role === 'admin' ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-700'} rounded-full flex items-center justify-center font-bold text-xs shadow-2xs">
                                     ${initial}
                                 </div>
                                 <span class="font-bold text-slate-900 cursor-pointer hover:text-indigo-600 transition" onclick="openModal('${emp.id}')">${emp.name}</span>
@@ -550,7 +552,7 @@
                         <td class="py-3.5 px-4">${deviceBadge}</td>
                         <td class="py-3.5 px-6 text-right">
                             <div class="flex items-center justify-end space-x-2">
-                                ${emp.role !== 'admin' ? `
+                                ${emp.role === 'employee' ? `
                                 <button onclick="openBindModal('${emp.id}')" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/60 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1" title="Bind device from active session or reset for auto-bind">
                                     <i class="fa-solid fa-link text-[10px]"></i>
                                     <span>Bind</span>
@@ -586,7 +588,7 @@
                 const response = await fetchWithAuth(`${API_BASE}/admin/users/${userId}`, { method: 'DELETE' });
                 const data = await response.json();
                 if (data.success) {
-                    showMessage(`${role === 'admin' ? 'Admin' : 'Employee'} deleted successfully`, 'success');
+                    showMessage(`${role === 'admin' || role === 'superadmin' ? 'Admin' : 'Employee'} deleted successfully`, 'success');
                     loadEmployees();
                 } else {
                     showMessage(data.message || 'Failed to delete user', 'error');

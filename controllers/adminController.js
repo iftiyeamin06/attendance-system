@@ -285,17 +285,15 @@ async function adminDashboard(req, res) {
     if (!dailyLogs) {
       const logs = await AttendanceLog.findAll({
         where: {
-          [Op.or]: [
-            { shiftDate: todayStr },
-            // Legacy rows without a shift date are matched by their clock-in day.
-            {
-              shiftDate: null,
-              clockInTime: {
-                [Op.gte]: dayStart,
-                [Op.lte]: dayEnd,
-              },
-            },
-          ],
+          // Attribute each log to the calendar day its clock-in happened on.
+          // shiftDate is not included: for overnight shifts a 1 AM clock-in has
+          // shiftDate = previous day, and OR-ing it back in would either hide
+          // the log from today's view or (as before) double-count it on both
+          // days. Every log has exactly one clock-in day.
+          clockInTime: {
+            [Op.gte]: dayStart,
+            [Op.lte]: dayEnd,
+          },
         },
         include: [
           {
@@ -1160,6 +1158,13 @@ async function deleteUser(req, res) {
       });
     }
 
+    if (user.role === 'superadmin') {
+      return res.status(400).json({
+        success: false,
+        message: 'Super Admin accounts cannot be deleted.',
+      });
+    }
+
     await cache.del(`bound_device:${userId}`);
     await AttendanceLog.destroy({ where: { userId } });
     await Leave.destroy({ where: { userId } });
@@ -1558,11 +1563,8 @@ async function buildDailyReportData(dateStr) {
   const logs = await AttendanceLog.findAll({
     where: {
       userId: { [Op.in]: employees.map(e => e.id) },
-      [Op.or]: [
-        { shiftDate: todayStr },
-        // Legacy rows without a shift date are matched by their clock-in day.
-        { shiftDate: null, clockInTime: { [Op.gte]: dayStart, [Op.lte]: dayEnd } },
-      ],
+      // Attribute each log to its clock-in calendar day (see adminDashboard).
+      clockInTime: { [Op.gte]: dayStart, [Op.lte]: dayEnd },
     },
     order: [['clockInTime', 'ASC']],
   });
@@ -1847,7 +1849,7 @@ async function resetUserPassword(req, res) {
       });
     }
 
-    if (target.role === 'admin') {
+    if (target.role === 'admin' || target.role === 'superadmin') {
       return res.status(400).json({
         success: false,
         message: 'Admin passwords cannot be reset from this panel.',

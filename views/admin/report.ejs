@@ -10,6 +10,12 @@
                     <p class="text-sm text-slate-500" id="report-subtitle">Complete attendance overview for all employees.</p>
                 </div>
                 <div class="flex flex-wrap items-center gap-3">
+                    <div class="flex items-center bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
+                        <button type="button" id="view-monthly-btn" onclick="switchView('monthly')"
+                            class="px-4 py-2 rounded-md text-xs font-bold transition bg-slate-900 text-white shadow-sm">Monthly</button>
+                        <button type="button" id="view-daily-btn" onclick="switchView('daily')"
+                            class="px-4 py-2 rounded-md text-xs font-bold transition text-slate-600 hover:text-slate-900 hover:bg-slate-100">Daily</button>
+                    </div>
                     <div id="monthly-controls" class="flex items-center space-x-2 bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm">
                         <i class="fa-regular fa-calendar text-slate-400 text-sm"></i>
                         <select id="month-select" onchange="loadReport()" class="bg-transparent text-sm font-semibold text-slate-700 focus:outline-none cursor-pointer">
@@ -34,7 +40,7 @@
                     </div>
                     <div id="daily-controls" class="flex items-center space-x-2 bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm">
                         <i class="fa-regular fa-calendar text-slate-400 text-sm"></i>
-                        <input type="date" id="daily-date" onchange="switchView('daily'); loadDailyReport()"
+                        <input type="date" id="daily-date" onchange="switchView('daily')"
                             class="bg-transparent text-sm font-semibold text-slate-700 focus:outline-none cursor-pointer">
                     </div>
                     <button id="monthly-export" onclick="exportReport()" class="btn-primary">
@@ -374,15 +380,24 @@
             document.getElementById('monthly-export').classList.toggle('hidden', !isMonthly);
             document.getElementById('daily-export').classList.toggle('hidden', isMonthly);
 
+            const activeBtn = 'px-4 py-2 rounded-md text-xs font-bold transition bg-slate-900 text-white shadow-sm';
+            const idleBtn = 'px-4 py-2 rounded-md text-xs font-bold transition text-slate-600 hover:text-slate-900 hover:bg-slate-100';
+            document.getElementById('view-monthly-btn').className = isMonthly ? activeBtn : idleBtn;
+            document.getElementById('view-daily-btn').className = isMonthly ? idleBtn : activeBtn;
+
             document.getElementById('report-title').textContent = isMonthly ? 'Monthly Summary' : 'Daily Report';
             document.getElementById('report-subtitle').textContent = isMonthly
                 ? 'Complete attendance overview for all employees.'
                 : 'Attendance status for every employee on a selected day.';
 
-            if (!isMonthly && !document.getElementById('daily-date').value) {
-                document.getElementById('daily-date').value = dhakaDateStr();
+            if (isMonthly) {
+                loadReport();
+            } else {
+                if (!document.getElementById('daily-date').value) {
+                    document.getElementById('daily-date').value = dhakaDateStr();
+                }
+                loadDailyReport();
             }
-            if (!isMonthly) loadDailyReport();
         }
 
         async function loadDailyReport() {
@@ -548,7 +563,6 @@
             yearSelect.value = now.getFullYear();
             document.getElementById('daily-date').value = dhakaDateStr();
             switchView('monthly');
-            loadReport();
         });
     </script>
 

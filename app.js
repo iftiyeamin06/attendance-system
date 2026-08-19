@@ -136,7 +136,7 @@ app.use('/api/leaves', leaveRoutes);
 
 function homePathFor(user) {
   if (user && user.mustChangePassword) return '/change-password';
-  if (user && user.role === 'admin') return '/admin/dashboard';
+  if (user && (user.role === 'admin' || user.role === 'superadmin')) return '/admin/dashboard';
   if (user && user.role === 'employee') return '/employee/dashboard';
   return '/login';
 }
@@ -172,7 +172,11 @@ function requireWebAuth(req, res, next) {
 }
 
 function requireAdminWeb(req, res, next) {
-  if (!req.session || !req.session.user || req.session.user.role !== 'admin') {
+  if (
+    !req.session ||
+    !req.session.user ||
+    (req.session.user.role !== 'admin' && req.session.user.role !== 'superadmin')
+  ) {
     return res.redirect('/login');
   }
   if (req.session.user.mustChangePassword && req.path !== '/change-password') {
@@ -301,7 +305,7 @@ app.post('/api/auth/login-web', async (req, res) => {
     res.redirect(
       user.mustChangePassword
         ? '/change-password'
-        : user.role === 'admin'
+        : user.role === 'admin' || user.role === 'superadmin'
           ? '/admin/dashboard'
           : '/employee/dashboard'
     );
@@ -313,7 +317,12 @@ app.post('/api/auth/login-web', async (req, res) => {
 app.post('/api/auth/admin-login-web', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ where: { email, role: 'admin' } });
+    const user = await User.findOne({
+      where: {
+        email,
+        role: ['admin', 'superadmin'],
+      },
+    });
 
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.render('auth/login', { error: 'Invalid credentials.' });
@@ -339,7 +348,7 @@ app.post('/api/auth/admin-login-web', async (req, res) => {
     res.redirect(
       user.mustChangePassword
         ? '/change-password'
-        : user.role === 'admin'
+        : user.role === 'admin' || user.role === 'superadmin'
           ? '/admin/dashboard'
           : '/employee/dashboard'
     );
@@ -378,6 +387,30 @@ async function startServer() {
       await sequelize.query(
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS device_secret_hash VARCHAR(255)'
       );
+      await sequelize.query(
+        `ALTER TYPE "enum_users_role" ADD VALUE IF NOT EXISTS 'superadmin'`
+      );
+
+      // Ensure a default Super Admin exists for system setup (idempotent).
+      const superAdmin = await User.findOne({
+        where: { email: 'superadmin@attendance.local' },
+      });
+      if (!superAdmin) {
+        await User.create({
+          name: 'System Super Admin',
+          email: 'superadmin@attendance.local',
+          password: await bcrypt.hash(
+            process.env.SUPERADMIN_PASSWORD || 'Superadmin#2026',
+            parseInt(process.env.BCRYPT_ROUNDS) || 12
+          ),
+          role: 'superadmin',
+        });
+        console.log(
+          'Super Admin created: superadmin@attendance.local / ' +
+            (process.env.SUPERADMIN_PASSWORD || 'Superadmin#2026')
+        );
+      }
+
       console.log('Database migrations applied.');
     } catch (migErr) {
       console.warn('Migration warning (non-fatal):', migErr.message);

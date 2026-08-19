@@ -7,6 +7,33 @@ async function seed() {
     await sequelize.sync({ force: false });
     console.log('Database synced.\n');
 
+    // Ensure the role enum supports superadmin (Postgres does not add enum
+    // values automatically).
+    try {
+      await sequelize.query(
+        `ALTER TYPE "enum_users_role" ADD VALUE IF NOT EXISTS 'superadmin'`
+      );
+      console.log('Role enum updated (superadmin).');
+    } catch (enumErr) {
+      console.warn('Enum migration warning:', enumErr.message);
+    }
+
+    // Create the default Super Admin (system setup account)
+    const superAdminEmail = 'superadmin@attendance.local';
+    const superAdminPassword = 'Superadmin#2026';
+    let superAdmin = await User.findOne({ where: { email: superAdminEmail } });
+    if (!superAdmin) {
+      superAdmin = await User.create({
+        name: 'System Super Admin',
+        email: superAdminEmail,
+        password: await bcrypt.hash(superAdminPassword, 12),
+        role: 'superadmin',
+      });
+      console.log(`Created Super Admin: ${superAdminEmail} / ${superAdminPassword}`);
+    } else {
+      console.log(`Super Admin exists: ${superAdminEmail}`);
+    }
+
     // Create employees
     const employees = [
       { name: 'ifti Yeamin', email: 'iftiyeamin06@gmail.com', password: 'ifti123' },
@@ -128,6 +155,7 @@ async function seed() {
     }
 
     console.log('\nDone! Login credentials:');
+    console.log('Super Admin: superadmin@attendance.local / Superadmin#2026');
     console.log('Admin: admin@attendance.local / admin123');
     employees.forEach(e => console.log(`Employee: ${e.email} / ${e.password}`));
 

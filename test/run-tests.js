@@ -69,6 +69,14 @@ async function runTests() {
   const adminToken = adminLogin.body.token;
   const adminId = adminLogin.body.user.id;
 
+  const superAdminLogin = await request('POST', '/api/auth/login', {
+    email: process.env.TEST_SUPERADMIN_EMAIL || 'superadmin@attendance.local',
+    password: process.env.TEST_SUPERADMIN_PASSWORD || 'Superadmin#2026',
+  });
+  test('Super Admin login', superAdminLogin.status === 200 && superAdminLogin.body.user?.role === 'superadmin',
+    `Role: ${superAdminLogin.body.user?.role}`);
+  const superAdminToken = superAdminLogin.body.token;
+
   const e2eEmail = `e2e.${Date.now()}@attendance.local`;
   const e2ePassword = 'e2e-pass-123';
   const e2eCreate = await request('POST', '/api/admin/users', {
@@ -157,7 +165,7 @@ async function runTests() {
     'POST',
     '/api/admin/settings/ip',
     { office_public_ip: '10.0.0.50' },
-    { Authorization: `Bearer ${adminToken}` }
+    { Authorization: `Bearer ${superAdminToken}` }
   );
   test('Office IP update', ipUpdate.status === 200, `Status: ${ipUpdate.status}, IP: ${ipUpdate.body.data?.office_public_ip}`);
 
@@ -703,7 +711,7 @@ async function runTests() {
 
   const ipForTrust = await request('POST', '/api/admin/settings/ip', {
     office_public_ip: '127.0.0.1',
-  }, { Authorization: `Bearer ${adminToken}` });
+  }, { Authorization: `Bearer ${superAdminToken}` });
   test('Trust test: office IP set to localhost', ipForTrust.status === 200, `Status: ${ipForTrust.status}`);
 
   const trReg = await request('POST', '/api/device/register', {
@@ -890,7 +898,7 @@ async function runTests() {
       'POST',
       '/api/admin/settings/ip',
       { office_public_ip: officeIpBefore },
-      { Authorization: `Bearer ${adminToken}` }
+      { Authorization: `Bearer ${superAdminToken}` }
     );
     test('Restore original office IP', ipRestore.status === 200, `Status: ${ipRestore.status}, IP: ${officeIpBefore}`);
   } else {
