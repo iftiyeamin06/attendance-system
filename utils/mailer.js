@@ -14,13 +14,21 @@ function getTransporter() {
     return null;
   }
 
+  const isPort465 = port === 465;
+
   return nodemailer.createTransport({
     host,
     port,
-    secure: port === 465,
+    secure: isPort465,
     auth: {
       user,
       pass,
+    },
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 10000,
+    tls: {
+      rejectUnauthorized: false,
     },
   });
 }
