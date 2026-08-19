@@ -66,7 +66,7 @@ async function login(req, res) {
 
 async function registerEmployee(req, res) {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
@@ -91,7 +91,8 @@ async function registerEmployee(req, res) {
       name,
       email,
       password: hashedPassword,
-      role: role || 'employee',
+      // Role is always 'employee' here; admins are created via /api/admin/admins.
+      role: 'employee',
     });
 
     return res.status(201).json({
@@ -207,13 +208,23 @@ async function requestPasswordReset(req, res) {
       expiresAt,
     });
 
+    // Only expose the reset link in non-production environments. With no email
+    // service configured, showing it was leaking a working account-takeover
+    // token to anyone who called this endpoint.
+    if (process.env.NODE_ENV !== 'production') {
+      return res.json({
+        success: true,
+        message:
+          'Reset link generated. Since no email service is configured, use the link below.',
+        reset_token: token,
+        reset_url: `/reset-password?token=${token}`,
+        expires_in_minutes: 15,
+      });
+    }
+
     return res.json({
       success: true,
-      message:
-        'Reset link generated. Since no email service is configured, use the link below.',
-      reset_token: token,
-      reset_url: `/reset-password?token=${token}`,
-      expires_in_minutes: 15,
+      message: 'If that email exists, a reset link has been generated. Please check your inbox.',
     });
   } catch (err) {
     console.error('Request password reset error:', err);

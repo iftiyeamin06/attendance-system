@@ -8,6 +8,15 @@ function normalizeIp(ip) {
   return ip;
 }
 
+// When a trusted reverse proxy is configured (e.g. production/Render with
+// TRUST_PROXY=true), Express derives req.ip from the LAST X-Forwarded-For entry
+// appended by the proxy, which a client cannot spoof. Reading
+// req.headers['x-forwarded-for'] directly is unsafe: its FIRST entry is fully
+// client-controlled, so it must not be used for the office-IP check or audit.
+function usesTrustProxy(req) {
+  return !!req.app.get('trust proxy');
+}
+
 async function ipValidationMiddleware(req, res, next) {
   let allowedIp;
 
@@ -30,16 +39,7 @@ async function ipValidationMiddleware(req, res, next) {
 
   const detectedIps = candidateIps(req);
 
-  const firstForwarded = (() => {
-    const fwd = req.headers['x-forwarded-for'];
-    if (fwd && typeof fwd === 'string') return normalizeIp(fwd.split(',')[0].trim());
-    return null;
-  })();
-
-  const matchesAllowed = (ip) => ip && allowedIps.includes(normalizeIp(ip));
-  const matched =
-    (firstForwarded && allowedIps.includes(firstForwarded)) ||
-    detectedIps.some(matchesAllowed);
+  const matched = detectedIps.some((ip) => allowedIps.includes(ip));
 
   if (!matched) {
     return res.status(403).json({
@@ -56,6 +56,19 @@ async function ipValidationMiddleware(req, res, next) {
 }
 
 function extractClientIp(req) {
+  if (usesTrustProxy(req)) {
+    return normalizeIp(
+      req.ip ||
+      req.connection?.remoteAddress ||
+      req.socket?.remoteAddress ||
+      req.connection?.socket?.remoteAddress ||
+      'unknown'
+    );
+  }
+
+  // No trusted proxy: the socket address is the direct client. X-Forwarded-For
+  // is only a fallback for deployments sitting behind a proxy the app does not
+  // trust (where it cannot be used as a security boundary anyway).
   const forwarded = req.headers['x-forwarded-for'];
   if (forwarded && typeof forwarded === 'string') {
     const first = forwarded.split(',')[0].trim();
@@ -72,11 +85,18 @@ function extractClientIp(req) {
 
 function candidateIps(req) {
   const candidates = [];
+
+  if (usesTrustProxy(req)) {
+    const ip = extractClientIp(req);
+    if (ip && ip !== 'unknown') candidates.push(ip);
+    return candidates;
+  }
+
   const forwarded = req.headers['x-forwarded-for'];
   if (forwarded && typeof forwarded === 'string') {
     forwarded.split(',').forEach((p) => {
       const ip = normalizeIp(p.trim());
-      if (ip && ip !== 'unknown') candidates.push(ip);
+      if (ip && ip !== 'unknown' && !candidates.includes(ip)) candidates.push(ip);
     });
   }
   const local = extractClientIp(req);

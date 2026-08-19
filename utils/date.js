@@ -152,4 +152,5 @@ module.exports = {
   deadlineEpoch,
   shiftEndEpoch,
   zonedDayRange,
+  addDaysToYmd,
 };

@@ -1,6 +1,7 @@
 const { User } = require('../models');
 const cache = require('../redis/cache');
 const { setTrustOnResponse } = require('../middleware/deviceTrust');
+const { generateDeviceSecret, hashDeviceSecret } = require('../middleware/deviceValidation');
 
 async function registerDevice(req, res) {
   try {
@@ -22,7 +23,9 @@ async function registerDevice(req, res) {
       });
     }
 
+    const secret = generateDeviceSecret();
     user.boundDeviceId = device_uuid;
+    user.deviceSecretHash = hashDeviceSecret(secret);
     await user.save();
 
     await cache.set(`bound_device:${user.id}`, device_uuid, 86400);
@@ -37,6 +40,7 @@ async function registerDevice(req, res) {
         user_id: user.id,
         bound_device_id: device_uuid,
         trust_level: 'trusted',
+        device_secret: secret,
       },
     });
   } catch (err) {

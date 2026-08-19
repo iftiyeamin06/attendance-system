@@ -17,6 +17,7 @@ async function clearBoundDevices() {
       if (user.boundDeviceId) {
         await cache.del(`bound_device:${user.id}`);
         user.boundDeviceId = null;
+        user.deviceSecretHash = null;
         await user.save();
         console.log(`Cleared bound device for ${user.email}`);
       } else {

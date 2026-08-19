@@ -39,6 +39,7 @@ app.use(
           'https://cdn.tailwindcss.com',
           'https://cdnjs.cloudflare.com',
         ],
+        scriptSrcAttr: ["'self'", "'unsafe-inline'"],
         styleSrc: [
           "'self'",
           "'unsafe-inline'",
@@ -369,6 +370,18 @@ async function startServer() {
 
     await sequelize.sync({ force: false });
     console.log('Database synced.');
+
+    // sequelize.sync() does not add new columns to existing tables. Apply the
+    // device-secret column idempotently so existing deployments (including the
+    // production database) pick it up on their next start.
+    try {
+      await sequelize.query(
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS device_secret_hash VARCHAR(255)'
+      );
+      console.log('Database migrations applied.');
+    } catch (migErr) {
+      console.warn('Migration warning (non-fatal):', migErr.message);
+    }
 
     // The Postgres session store auto-creates its "sessions" table on first use
     // (createTableIfMissing: true).

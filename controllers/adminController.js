@@ -13,6 +13,7 @@ const {
   deadlineEpoch,
   zonedDayRange,
   computeShiftDate,
+  addDaysToYmd,
 } = require('../utils/date');
 
 function calculateDuration(clockIn, clockOut) {
@@ -31,6 +32,16 @@ function combineDateAndTime(dateStr, timeStr) {
 
 function validateManualStatus(status) {
   return ['PRESENT', 'LATE', 'ABSENT'].includes(status) ? status : null;
+}
+
+// Overnight shifts (office end time <= office start time) run past midnight, so
+// a clock-out wall time earlier than the clock-in wall time belongs to the
+// following calendar day.
+async function isOvernightShift() {
+  const officeTimes = await (require('./leaveController')).getOfficeTimes();
+  const [sH, sM] = officeTimes.start.split(':').map(Number);
+  const [eH, eM] = officeTimes.end.split(':').map(Number);
+  return eH * 60 + eM <= sH * 60 + sM;
 }
 
 async function addAdmin(req, res) {
@@ -179,6 +190,9 @@ async function bindDevice(req, res) {
 
     const previousDevice = user.boundDeviceId;
     user.boundDeviceId = deviceToBind;
+    // A manually-bound device has no server-issued secret yet; the employee's
+    // next clock-in from it will receive one.
+    user.deviceSecretHash = null;
     await user.save();
 
     await cache.del(`bound_device:${user.id}`);
@@ -272,13 +286,15 @@ async function adminDashboard(req, res) {
       const logs = await AttendanceLog.findAll({
         where: {
           [Op.or]: [
+            { shiftDate: todayStr },
+            // Legacy rows without a shift date are matched by their clock-in day.
             {
+              shiftDate: null,
               clockInTime: {
                 [Op.gte]: dayStart,
                 [Op.lte]: dayEnd,
               },
             },
-            { shiftDate: todayStr },
           ],
         },
         include: [
@@ -451,6 +467,7 @@ async function resetDevice(req, res) {
 
     const previousDevice = user.boundDeviceId;
     user.boundDeviceId = null;
+    user.deviceSecretHash = null;
     await user.save();
 
     await cache.del(`bound_device:${user.id}`);
@@ -588,10 +605,14 @@ async function addManualPunch(req, res) {
     let clockInTime = combineDateAndTime(shift_date, clock_in);
     let clockOutTime = combineDateAndTime(shift_date, clock_out);
     if (clockInTime && clockOutTime && clockOutTime < clockInTime) {
-      return res.status(400).json({
-        success: false,
-        message: 'Clock-out must be after clock-in.',
-      });
+      if (await isOvernightShift()) {
+        clockOutTime = combineDateAndTime(addDaysToYmd(shift_date, 1), clock_out);
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'Clock-out must be after clock-in.',
+        });
+      }
     }
 
     if (manualStatus === 'ABSENT') {
@@ -721,10 +742,14 @@ async function editAttendanceLog(req, res) {
     }
 
     if (log.clockInTime && log.clockOutTime && log.clockOutTime < log.clockInTime) {
-      return res.status(400).json({
-        success: false,
-        message: 'Clock-out must be after clock-in.',
-      });
+      if (await isOvernightShift()) {
+        log.clockOutTime = combineDateAndTime(addDaysToYmd(baseDate, 1), req.body.clock_out);
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'Clock-out must be after clock-in.',
+        });
+      }
     }
 
     if (manualStatus === 'ABSENT') {
@@ -799,16 +824,31 @@ async function exportCsv(req, res) {
     const { startDate, endDate } = req.query;
 
     const where = {};
+    const legacyClockInWhere = {};
+    let shiftDateRange = null;
 
     if (startDate && endDate) {
-      where.clockInTime = {
+      shiftDateRange = { [Op.gte]: startDate, [Op.lte]: endDate };
+      legacyClockInWhere.clockInTime = {
         [Op.gte]: new Date(startDate),
-        [Op.lte]: new Date(endDate),
+        // Inclusive end date in UTC.
+        [Op.lt]: new Date(addDaysToYmd(endDate, 1)),
       };
     } else if (startDate) {
-      where.clockInTime = {
-        [Op.gte]: new Date(startDate),
+      shiftDateRange = { [Op.gte]: startDate };
+      legacyClockInWhere.clockInTime = { [Op.gte]: new Date(startDate) };
+    } else if (endDate) {
+      shiftDateRange = { [Op.lte]: endDate };
+      legacyClockInWhere.clockInTime = {
+        [Op.lt]: new Date(addDaysToYmd(endDate, 1)),
       };
+    }
+
+    if (shiftDateRange) {
+      where[Op.or] = [
+        { shiftDate: shiftDateRange },
+        { shiftDate: null, ...legacyClockInWhere },
+      ];
     }
 
     const logs = await AttendanceLog.findAll({
@@ -820,21 +860,30 @@ async function exportCsv(req, res) {
           attributes: ['name', 'email'],
         },
       ],
-      order: [['clockInTime', 'DESC']],
+      order: [['shiftDate', 'ASC'], ['clockInTime', 'ASC']],
     });
 
+    // Get office time settings and calculate late status
+    const startSetting = await Setting.findOne({ where: { key: 'office_start_time' } });
+    const graceSetting = await Setting.findOne({ where: { key: 'grace_period_minutes' } });
+    const officeStartTime = startSetting ? startSetting.value : '09:00';
+    const graceMinutes = graceSetting ? parseInt(graceSetting.value) : 10;
+    const [startH, startM] = officeStartTime.split(':').map(Number);
+
     const csvData = logs.map((log) => {
-      // Calculate late status
-      const clockIn = new Date(log.clockInTime);
-      const logDate = new Date(clockIn);
-      logDate.setHours(0, 0, 0, 0);
-      
-      const startSetting = logs.length > 0 ? null : null; // Will fetch once below
-      const clockInHour = clockIn.getHours();
-      const clockInMinute = clockIn.getMinutes();
-      
+      const date = log.shiftDate || (log.clockInTime ? localDateStr(log.clockInTime) : '');
+      let late = 'No';
+      if (log.clockInTime && date) {
+        const clockInEpoch = new Date(log.clockInTime).getTime();
+        const deadline = deadlineEpoch(date, startH, startM + graceMinutes);
+        if (clockInEpoch > deadline) {
+          const lateMin = Math.floor((clockInEpoch - deadline) / 60000);
+          late = `Yes (${lateMin} min)`;
+        }
+      }
+
       return {
-        date: log.clockInTime ? localDateStr(log.clockInTime) : '',
+        date,
         employee_name: log.user?.name || 'Unknown',
         employee_email: log.user?.email || 'Unknown',
         clock_in_time: log.clockInTime ? formatDateTime(log.clockInTime) : '',
@@ -845,27 +894,8 @@ async function exportCsv(req, res) {
         ip_address: log.ipAddress,
         device_id: log.deviceIdUsed,
         status: log.manualStatus || log.status,
-        late: 'No', // Will be calculated below
+        late,
       };
-    });
-
-    // Get office time settings and recalculate late status
-    const startSetting = await Setting.findOne({ where: { key: 'office_start_time' } });
-    const graceSetting = await Setting.findOne({ where: { key: 'grace_period_minutes' } });
-    const officeStartTime = startSetting ? startSetting.value : '09:00';
-    const graceMinutes = graceSetting ? parseInt(graceSetting.value) : 10;
-    const [startH, startM] = officeStartTime.split(':').map(Number);
-
-    csvData.forEach((row) => {
-      if (row.clock_in_time) {
-        const clockIn = new Date(row.clock_in_time);
-        const deadline = new Date(clockIn);
-        deadline.setHours(startH, startM + graceMinutes, 0, 0);
-        if (clockIn > deadline) {
-          const lateMin = Math.floor((clockIn - deadline) / 60000);
-          row.late = `Yes (${lateMin} min)`;
-        }
-      }
     });
 
     const parser = new Parser({
@@ -1529,8 +1559,9 @@ async function buildDailyReportData(dateStr) {
     where: {
       userId: { [Op.in]: employees.map(e => e.id) },
       [Op.or]: [
-        { clockInTime: { [Op.gte]: dayStart, [Op.lte]: dayEnd } },
         { shiftDate: todayStr },
+        // Legacy rows without a shift date are matched by their clock-in day.
+        { shiftDate: null, clockInTime: { [Op.gte]: dayStart, [Op.lte]: dayEnd } },
       ],
     },
     order: [['clockInTime', 'ASC']],

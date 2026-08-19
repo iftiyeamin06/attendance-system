@@ -95,6 +95,7 @@ async function clockIn(req, res) {
         clock_in_time: log.clockInTime,
         ip_address: log.ipAddress,
         device_id: log.deviceIdUsed,
+        device_secret: req.deviceValidationResult?.deviceSecret || null,
         device_trust: req.deviceValidationResult?.trustLevel || 'trusted',
         auto_closed_log: autoClosedLog
           ? {
@@ -171,6 +172,7 @@ async function clockOut(req, res) {
         shift_date: log.shiftDate,
         work_duration: calculateDuration(log.clockInTime, log.clockOutTime),
         total_worked: `${totalHours}h ${totalMins}m`,
+        device_secret: req.deviceValidationResult?.deviceSecret || null,
         device_trust: req.deviceValidationResult?.trustLevel || 'trusted',
       },
     });

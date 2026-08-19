@@ -12,6 +12,7 @@ module.exports = (sequelize, DataTypes) => {
     toJSON() {
       const values = { ...this.get() };
       delete values.password;
+      delete values.deviceSecretHash;
       return values;
     }
   }
@@ -45,6 +46,11 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
         field: 'bound_device_id',
+      },
+      deviceSecretHash: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        field: 'device_secret_hash',
       },
       mustChangePassword: {
         type: DataTypes.BOOLEAN,

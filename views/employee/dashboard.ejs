@@ -188,14 +188,23 @@
             return ensureDeviceId();
         }
 
+        // The device secret is issued by the server when a device is first
+        // bound. It is stored here and presented on later requests; a browser
+        // that was never bound has no secret to send.
+        function getStoredDeviceSecret() {
+            return localStorage.getItem('deviceSecret') || '';
+        }
+
         async function fetchWithAuth(url, options = {}) {
             const token = await getStoredToken();
             const deviceId = await getStoredDeviceId();
+            const deviceSecret = getStoredDeviceSecret();
 
             const headers = {
                 'Content-Type': 'application/json',
                 ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
                 ...(deviceId ? { 'X-Device-UUID': deviceId } : {}),
+                ...(deviceSecret ? { 'X-Device-Secret': deviceSecret } : {}),
             };
 
             const response = await fetch(url, {
@@ -377,6 +386,10 @@
                     if (returnedUuid) {
                         localStorage.setItem('deviceId', returnedUuid);
                     }
+                    const returnedSecret = data.data && data.data.device_secret;
+                    if (returnedSecret) {
+                        localStorage.setItem('deviceSecret', returnedSecret);
+                    }
                     showMessage('Time-in recorded successfully!', 'success');
                     renderTodayStatus();
                 } else {
@@ -399,6 +412,10 @@
                 });
                 const data = await response.json();
                 if (data.success) {
+                    const returnedSecret = data.data && data.data.device_secret;
+                    if (returnedSecret) {
+                        localStorage.setItem('deviceSecret', returnedSecret);
+                    }
                     showMessage('Time-out recorded successfully!', 'success');
                     renderTodayStatus();
                 } else {

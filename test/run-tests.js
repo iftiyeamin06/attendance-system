@@ -710,6 +710,7 @@ async function runTests() {
     device_uuid: 'trust-dev-001',
     device_info: 'trust test device',
   }, { Authorization: `Bearer ${token}` });
+  const trustSecret = trReg.body.data?.device_secret;
   const trustSetCookie = trReg.headers['set-cookie'];
   const trustCookieArr = Array.isArray(trustSetCookie) ? trustSetCookie : (trustSetCookie ? [trustSetCookie] : []);
   const trustCookieLine = trustCookieArr.find((c) => c.includes('device_trust=')) || '';
@@ -753,6 +754,7 @@ async function runTests() {
   const ciRecovery = await request('POST', '/api/attendance/clock-in', null, {
     Authorization: `Bearer ${token}`,
     'X-Device-UUID': 'trust-dev-001',
+    'X-Device-Secret': trustSecret || '',
     Cookie: 'device_trust=Fake.Signed.Token',
   });
   const recoverCookie = ciRecovery.headers['set-cookie'];

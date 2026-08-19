@@ -1,7 +1,23 @@
+const crypto = require('crypto');
 const cache = require('../redis/cache');
-const { getTrustFromRequest, setTrustOnResponse } = require('./deviceTrust');
+const { getTrustFromRequest, setTrustOnResponse, clearTrustOnResponse } = require('./deviceTrust');
 
 const REVOKE_TTL = 86400;
+
+function hashDeviceSecret(secret) {
+  return crypto.createHash('sha256').update(String(secret)).digest('hex');
+}
+
+function verifyDeviceSecret(secret, storedHash) {
+  if (!secret || !storedHash) return false;
+  const a = Buffer.from(hashDeviceSecret(secret));
+  const b = Buffer.from(String(storedHash));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function generateDeviceSecret() {
+  return crypto.randomBytes(32).toString('base64url');
+}
 
 async function isTrustRevoked(userId, trust) {
   const revokedAt = await cache.get(`revoke_trust:${userId}`);
@@ -15,6 +31,7 @@ async function isTrustRevoked(userId, trust) {
 
 async function deviceValidationMiddleware(req, res, next) {
   const deviceUuid = req.headers['x-device-uuid'];
+  const presentedSecret = req.headers['x-device-secret'];
 
   if (!deviceUuid) {
     console.error(
@@ -29,17 +46,26 @@ async function deviceValidationMiddleware(req, res, next) {
   }
 
   const user = req.user;
-  const trust = getTrustFromRequest(req);
-  const trustActive = trust && !(await isTrustRevoked(user.id, trust));
+  let trust = getTrustFromRequest(req);
+  let trustActive = trust && !(await isTrustRevoked(user.id, trust));
 
   if (trustActive && trust.sub !== user.id) {
-    return res.status(403).json({
-      success: false,
-      message: 'Device trust token is linked to a different account. Please log in and register your own device.',
-      error_code: 'DEVICE_TRUST_CROSS_ACCOUNT',
-    });
+    // The browser still holds a device_trust cookie from a different account
+    // (e.g., testing/switching accounts on one browser). The current user IS
+    // authenticated via their valid session/JWT, so clear the stale cookie and
+    // continue — the device will be (re)bound to the account actually using it.
+    console.warn(
+      `[device-validation] Clearing stale device_trust cookie for ${user.email} ` +
+      `(token was bound to ${trust.sub}).`
+    );
+    clearTrustOnResponse(res);
+    trust = null;
+    trustActive = false;
   }
 
+  // A valid trust cookie whose device claim matches the presented device is
+  // proof that this browser was previously bound to this account+device, so the
+  // device secret is not required for that request.
   if (trustActive && trust.dev === deviceUuid) {
     req.deviceValidationResult = {
       valid: true,
@@ -59,7 +85,12 @@ async function deviceValidationMiddleware(req, res, next) {
       });
     }
 
+    // First-time binding: the server issues a secret instead of trusting the
+    // client-chosen device UUID. The raw secret is returned exactly once so the
+    // browser can present it on subsequent requests.
+    const secret = generateDeviceSecret();
     user.boundDeviceId = deviceUuid;
+    user.deviceSecretHash = hashDeviceSecret(secret);
     await user.save();
     await cache.set(`bound_device:${user.id}`, deviceUuid, 86400);
     setTrustOnResponse(res, user.id, deviceUuid);
@@ -68,6 +99,7 @@ async function deviceValidationMiddleware(req, res, next) {
       valid: true,
       trustLevel: 'auto_bound',
       deviceId: deviceUuid,
+      deviceSecret: secret,
     };
     return next();
   }
@@ -94,12 +126,6 @@ async function deviceValidationMiddleware(req, res, next) {
     }
 
     await cache.del(`bound_device:${user.id}`);
-    req.deviceValidationResult = {
-      valid: false,
-      reason: 'UNREGISTERED_DEVICE',
-      deviceId: deviceUuid,
-      registeredDeviceId: boundDeviceId,
-    };
     return res.status(403).json({
       success: false,
       message:
@@ -108,26 +134,34 @@ async function deviceValidationMiddleware(req, res, next) {
     });
   }
 
-  if (trustActive) {
-    if (trust.dev === deviceUuid) {
-      req.deviceValidationResult = {
-        valid: true,
-        trustLevel: 'trusted',
-        deviceId: deviceUuid,
-        registeredDeviceId: boundDeviceId,
-      };
-      return next();
-    }
-
+  // The device matches the bound device but no trust cookie covers it. Require
+  // the server-issued device secret unless the binding predates the secret
+  // scheme (in which case a secret is issued on first successful use).
+  if (!user.deviceSecretHash) {
+    const secret = generateDeviceSecret();
+    user.deviceSecretHash = hashDeviceSecret(secret);
+    await user.save();
     setTrustOnResponse(res, user.id, deviceUuid);
     req.deviceValidationResult = {
       valid: true,
       trustLevel: 'recovered',
-      reason: 'DEVICE_REBOUND_COOKIE_STALE',
+      reason: 'LEGACY_DEVICE_SECRET_ISSUED',
       deviceId: deviceUuid,
       registeredDeviceId: boundDeviceId,
+      deviceSecret: secret,
     };
     return next();
+  }
+
+  if (!verifyDeviceSecret(presentedSecret, user.deviceSecretHash)) {
+    console.warn(
+      `[device-validation] Device secret mismatch for ${user.email} (device ${deviceUuid}).`
+    );
+    return res.status(403).json({
+      success: false,
+      message: 'This device is not recognized. Please use the registered device.',
+      error_code: 'DEVICE_SECRET_MISMATCH',
+    });
   }
 
   setTrustOnResponse(res, user.id, deviceUuid);
@@ -142,3 +176,6 @@ async function deviceValidationMiddleware(req, res, next) {
 }
 
 module.exports = deviceValidationMiddleware;
+module.exports.hashDeviceSecret = hashDeviceSecret;
+module.exports.verifyDeviceSecret = verifyDeviceSecret;
+module.exports.generateDeviceSecret = generateDeviceSecret;
