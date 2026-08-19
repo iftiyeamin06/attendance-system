@@ -252,15 +252,6 @@ app.get('/employee/settings', requireWebAuth, async (req, res) => {
   });
 });
 
-app.get('/forgot-password', (req, res) => {
-  res.render('auth/forgot-password', { error: null });
-});
-
-app.get('/reset-password', (req, res) => {
-  const token = typeof req.query.token === 'string' ? req.query.token : '';
-  res.render('auth/reset-password', { error: null, token });
-});
-
 app.get('/change-password', requireWebAuth, (req, res) => {
   res.render('auth/change-password', {
     user: req.session.user,
@@ -386,6 +377,12 @@ async function startServer() {
     try {
       await sequelize.query(
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS device_secret_hash VARCHAR(255)'
+      );
+      await sequelize.query(
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE'
+      );
+      await sequelize.query(
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ'
       );
       await sequelize.query(
         `ALTER TYPE "enum_users_role" ADD VALUE IF NOT EXISTS 'superadmin'`

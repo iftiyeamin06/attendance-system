@@ -1,4 +1,4 @@
-const { User, AttendanceLog, Setting, Leave, PasswordReset, Holiday, AuditLog } = require('../models');
+const { User, AttendanceLog, Setting, Leave, Holiday, AuditLog } = require('../models');
 const cache = require('../redis/cache');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
@@ -1168,7 +1168,6 @@ async function deleteUser(req, res) {
     await cache.del(`bound_device:${userId}`);
     await AttendanceLog.destroy({ where: { userId } });
     await Leave.destroy({ where: { userId } });
-    await PasswordReset.destroy({ where: { userId } });
     await user.destroy();
 
     return res.status(200).json({
