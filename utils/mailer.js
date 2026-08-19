@@ -188,7 +188,9 @@ async function sendResetEmail(toEmail, resetUrl) {
   if (process.env.RESEND_API_KEY) {
     try {
       const from =
-        process.env.RESEND_FROM || process.env.SMTP_FROM || 'Attendance System <onboarding@resend.dev>';
+        process.env.RESEND_FROM && !process.env.RESEND_FROM.includes('@gmail.com')
+          ? process.env.RESEND_FROM
+          : 'Attendance System <onboarding@resend.dev>';
       const res = await sendHttpsPost(
         'https://api.resend.com/emails',
         { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
