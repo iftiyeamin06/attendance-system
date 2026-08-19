@@ -266,11 +266,18 @@
             if (!ip) { alert('Please enter a valid IP address'); return; }
 
             try {
-                await fetchWithAuth(`${API_BASE}/admin/settings/ip`, {
+                const ipResponse = await fetchWithAuth(`${API_BASE}/admin/settings/ip`, {
                     method: 'POST',
                     body: JSON.stringify({ office_public_ip: ip }),
                 });
-                await fetchWithAuth(`${API_BASE}/admin/settings/office-time`, {
+                const ipData = await ipResponse.json().catch(() => ({}));
+                if (ipData.success === false) {
+                    showMessage(ipData.message || 'Failed to update office IP', 'error');
+                    loadSettings();
+                    return;
+                }
+
+                const otResponse = await fetchWithAuth(`${API_BASE}/admin/settings/office-time`, {
                     method: 'POST',
                     body: JSON.stringify({
                         office_start_time: startTime,
@@ -278,6 +285,13 @@
                         grace_period_minutes: parseInt(gracePeriod),
                     }),
                 });
+                const otData = await otResponse.json().catch(() => ({}));
+                if (otData.success === false) {
+                    showMessage(otData.message || 'Failed to update office time', 'error');
+                    loadSettings();
+                    return;
+                }
+
                 showMessage('Settings saved successfully', 'success');
                 loadSettings();
             } catch (err) { console.error(err); }

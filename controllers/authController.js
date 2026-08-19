@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { User, PasswordReset } = require('../models');
+const { sendResetEmail } = require('../utils/mailer');
 
 function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -173,6 +174,10 @@ async function changePassword(req, res) {
   }
 }
 
+function isLoopbackIp(ip) {
+  return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+}
+
 async function requestPasswordReset(req, res) {
   try {
     const { email } = req.body;
@@ -190,11 +195,11 @@ async function requestPasswordReset(req, res) {
       return res.json({
         success: true,
         message:
-          'If that email exists, a reset link has been generated. Please check your inbox.',
+          'If that email exists, a password reset link has been sent to your inbox.',
       });
     }
 
-    const token = crypto.randomBytes(24).toString('hex');
+    const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
     await PasswordReset.update(
@@ -208,24 +213,45 @@ async function requestPasswordReset(req, res) {
       expiresAt,
     });
 
-    // Only expose the reset link in non-production environments. With no email
-    // service configured, showing it was leaking a working account-takeover
-    // token to anyone who called this endpoint.
-    if (process.env.NODE_ENV !== 'production') {
+    const resetUrl = `${req.protocol}://${req.get('host')}/reset-password?token=${token}`;
+
+    // Deliver the reset link out-of-band (email when SMTP is configured, server
+    // console otherwise). The token is NEVER included in this response for
+    // remote clients, so knowing someone's email is not enough to take over
+    // their account.
+    await sendResetEmail(user.email, resetUrl);
+
+    // Only the direct TCP peer is trusted for loopback detection — never the
+    // spoofable X-Forwarded-For header. Remote clients (including production
+    // behind Cloudflare) can never pass this check.
+    const isLoopback = isLoopbackIp(req.socket.remoteAddress || req.ip);
+
+    // Production guardrail: reset_token / reset_url must never reach the
+    // client payload. Always return the generic message.
+    if (process.env.NODE_ENV === 'production') {
       return res.json({
         success: true,
         message:
-          'Reset link generated. Since no email service is configured, use the link below.',
-        reset_token: token,
-        reset_url: `/reset-password?token=${token}`,
-        expires_in_minutes: 15,
+          'If that email exists, a password reset link has been sent to your inbox.',
       });
     }
 
-    return res.json({
-      success: true,
-      message: 'If that email exists, a reset link has been generated. Please check your inbox.',
-    });
+    return res.json(
+      isLoopback
+        ? {
+            success: true,
+            message:
+              'If that email exists, a password reset link has been sent to your inbox.',
+            reset_token: token,
+            reset_url: `/reset-password?token=${token}`,
+            expires_in_minutes: 15,
+          }
+        : {
+            success: true,
+            message:
+              'If that email exists, a password reset link has been sent to your inbox.',
+          }
+    );
   } catch (err) {
     console.error('Request password reset error:', err);
     return res.status(500).json({
