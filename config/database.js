@@ -1,4 +1,5 @@
 require('dotenv').config();
+const { Pool } = require('pg');
 
 function normalizeDatabaseUrl(url) {
   if (!url) return null;
@@ -47,7 +48,23 @@ function buildConfig(url, env, pool) {
   };
 }
 
+// Shared pg.Pool for the Postgres-backed session store (connect-pg-simple).
+// Reuses the same URL normalization and SSL rules as the Sequelize config.
+function getPgPool(max = 10) {
+  const url = normalizeDatabaseUrl(process.env.DATABASE_URL);
+  const ssl = getSslOptions(url, process.env.NODE_ENV || 'development');
+  return new Pool({
+    connectionString: url,
+    ssl,
+    max: parseInt(process.env.DATABASE_POOL_MAX || max, 10),
+    min: parseInt(process.env.DATABASE_POOL_MIN || 0, 10),
+    idleTimeoutMillis: parseInt(process.env.DATABASE_POOL_IDLE || 10000, 10),
+    connectionTimeoutMillis: 10000,
+  });
+}
+
 module.exports = {
+  getPgPool,
   development: buildConfig(process.env.DATABASE_URL, 'development', {
     max: 10,
     min: 0,

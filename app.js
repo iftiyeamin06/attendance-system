@@ -8,8 +8,12 @@ const cors = require('cors');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const session = require('express-session');
+const PgSession = require('connect-pg-simple')(session);
 const { sequelize, User, Setting } = require('./models');
+const { getPgPool } = require('./config/database');
 const cache = require('./redis/cache');
 
 const app = express();
@@ -21,13 +25,65 @@ if (shouldTrustProxy) {
   app.set('trust proxy', 1);
 }
 
-app.use(cors());
+// Security headers. CSP is configured to allow the CDNs the views rely on
+// (Tailwind Play CDN, Google Fonts, Font Awesome) plus inline scripts/styles.
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "'unsafe-eval'",
+          'https://cdn.tailwindcss.com',
+          'https://cdnjs.cloudflare.com',
+        ],
+        styleSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          'https://fonts.googleapis.com',
+          'https://cdnjs.cloudflare.com',
+        ],
+        fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https://cdnjs.cloudflare.com'],
+        imgSrc: ["'self'", 'data:', 'blob:'],
+        connectSrc: ["'self'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: false,
+  })
+);
+
+// Restrict CORS to the configured origins. Same-origin requests (the web app)
+// need no CORS headers; set ALLOWED_ORIGINS for any cross-origin API clients.
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin: allowedOrigins.length ? allowedOrigins : false,
+    credentials: true,
+  })
+);
+
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Persistent session store backed by PostgreSQL so sessions survive restarts,
+// scale across instances, and expire cleanly (instead of the in-memory store).
+const sessionStore = new PgSession({
+  pool: getPgPool(),
+  tableName: 'sessions',
+  createTableIfMissing: true,
+});
+
 app.use(
   session({
+    store: sessionStore,
     secret: process.env.JWT_SECRET || 'attendance_session_secret',
     resave: false,
     saveUninitialized: false,
@@ -39,6 +95,28 @@ app.use(
     },
   })
 );
+
+// Brute-force protection. Applied in production only so tests/local are unaffected.
+if (isProduction) {
+  app.use(
+    '/api',
+    rateLimit({
+      windowMs: 15 * 60 * 1000,
+      limit: 300,
+      legacyHeaders: false,
+      message: { success: false, message: 'Too many requests, please try again later.' },
+    })
+  );
+  app.use(
+    '/api/auth',
+    rateLimit({
+      windowMs: 15 * 60 * 1000,
+      limit: 20,
+      legacyHeaders: false,
+      message: { success: false, message: 'Too many login attempts, please try again later.' },
+    })
+  );
+}
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -291,6 +369,9 @@ async function startServer() {
 
     await sequelize.sync({ force: false });
     console.log('Database synced.');
+
+    // The Postgres session store auto-creates its "sessions" table on first use
+    // (createTableIfMissing: true).
 
     console.log('[cache] Initializing Redis...');
     await cache.init();
