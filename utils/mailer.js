@@ -1,4 +1,53 @@
+const https = require('https');
 const nodemailer = require('nodemailer');
+
+function sendHttpsPost(urlStr, headers, bodyObj) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(urlStr);
+    const postData = JSON.stringify(bodyObj);
+    const req = https.request(
+      {
+        hostname: url.hostname,
+        port: 443,
+        path: url.pathname + url.search,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData),
+          ...headers,
+        },
+        timeout: 8000,
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          try {
+            const parsed = JSON.parse(data);
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              resolve({ success: true, data: parsed });
+            } else {
+              reject(new Error(parsed.message || `HTTP ${res.statusCode}: ${data}`));
+            }
+          } catch {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              resolve({ success: true, raw: data });
+            } else {
+              reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+            }
+          }
+        });
+      }
+    );
+    req.on('error', reject);
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('HTTPS request timeout'));
+    });
+    req.write(postData);
+    req.end();
+  });
+}
 
 /**
  * Creates or retrieves the nodemailer SMTP transporter using current environment variables.
@@ -124,42 +173,90 @@ function buildResetEmailHtml(resetUrl) {
 
 /**
  * Sends a password reset email to the given recipient.
- * If SMTP is unconfigured, logs a warning and fallback link to console instead of throwing.
+ * Supports Resend API (HTTPS port 443), Brevo API (HTTPS port 443), and standard Nodemailer SMTP.
+ * If all providers are unconfigured, logs a warning and fallback link to console.
  *
  * @param {string} toEmail - Recipient email address
  * @param {string} resetUrl - Password reset URL containing one-time token
  * @returns {Promise<{success: boolean, fallback?: boolean, messageId?: string, error?: string}>}
  */
 async function sendResetEmail(toEmail, resetUrl) {
+  const html = buildResetEmailHtml(resetUrl);
+  const subject = 'Password Reset - Attendance System';
+
+  // 1. Resend HTTPS API (Port 443 - bypasses cloud SMTP port blocking)
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const from =
+        process.env.RESEND_FROM || process.env.SMTP_FROM || 'Attendance System <onboarding@resend.dev>';
+      const res = await sendHttpsPost(
+        'https://api.resend.com/emails',
+        { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
+        {
+          from,
+          to: [toEmail],
+          subject,
+          html,
+        }
+      );
+      return { success: true, messageId: res.data?.id };
+    } catch (err) {
+      console.error('[mailer:resend] Failed to send via Resend:', err.message);
+    }
+  }
+
+  // 2. Brevo HTTPS API (Port 443 - bypasses cloud SMTP port blocking)
+  if (process.env.BREVO_API_KEY) {
+    try {
+      const senderEmail = process.env.BREVO_SENDER || 'no-reply@attendance.local';
+      const res = await sendHttpsPost(
+        'https://api.brevo.com/v3/smtp/email',
+        { 'api-key': process.env.BREVO_API_KEY },
+        {
+          sender: { name: 'Attendance System', email: senderEmail },
+          to: [{ email: toEmail }],
+          subject,
+          htmlContent: html,
+        }
+      );
+      return { success: true, messageId: res.data?.messageId };
+    } catch (err) {
+      console.error('[mailer:brevo] Failed to send via Brevo:', err.message);
+    }
+  }
+
+  // 3. Standard SMTP via Nodemailer
   const fromAddress = process.env.SMTP_FROM || '"Attendance System" <no-reply@yourdomain.com>';
   const transporter = getTransporter();
 
-  if (!transporter) {
+  if (transporter) {
+    try {
+      const info = await transporter.sendMail({
+        from: fromAddress,
+        to: toEmail,
+        subject,
+        html,
+      });
+      return { success: true, messageId: info?.messageId };
+    } catch (err) {
+      console.error('[mailer:smtp] Failed to send reset email via SMTP:', err.message);
+      console.log(
+        `[mailer:fallback] Password reset link for ${toEmail}: ${resetUrl} (expires in 15 minutes, single use)`
+      );
+      return { success: false, error: err.message };
+    }
+  } else {
     console.warn(
       '[mailer] SMTP environment variables are missing (SMTP_HOST/SMTP_USER). ' +
         'Password reset email will not be sent; logging to console instead.'
     );
-    console.log(
-      `[mailer:fallback] Password reset link for ${toEmail}: ${resetUrl} (expires in 15 minutes, single use)`
-    );
-    return { success: false, fallback: true };
   }
 
-  try {
-    const info = await transporter.sendMail({
-      from: fromAddress,
-      to: toEmail,
-      subject: 'Password Reset - Attendance System',
-      html: buildResetEmailHtml(resetUrl),
-    });
-    return { success: true, messageId: info?.messageId };
-  } catch (err) {
-    console.error('[mailer] Failed to send reset email:', err.message);
-    console.log(
-      `[mailer:fallback] Password reset link for ${toEmail}: ${resetUrl} (expires in 15 minutes, single use)`
-    );
-    return { success: false, error: err.message };
-  }
+  // Fallback to console
+  console.log(
+    `[mailer:fallback] Password reset link for ${toEmail}: ${resetUrl} (expires in 15 minutes, single use)`
+  );
+  return { success: false, fallback: true };
 }
 
 module.exports = {
@@ -167,6 +264,10 @@ module.exports = {
   getTransporter,
   buildResetEmailHtml,
   get isConfigured() {
-    return !!(process.env.SMTP_HOST && process.env.SMTP_USER);
+    return !!(
+      process.env.RESEND_API_KEY ||
+      process.env.BREVO_API_KEY ||
+      (process.env.SMTP_HOST && process.env.SMTP_USER)
+    );
   },
 };
