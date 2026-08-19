@@ -215,13 +215,18 @@ async function requestPasswordReset(req, res) {
 
     const resetUrl = `${req.protocol}://${req.get('host')}/reset-password?token=${token}`;
 
-    // Deliver the reset link out-of-band (email when SMTP is configured, server
-    // console otherwise). In production, we trigger out-of-band delivery asynchronously
-    // so any network/SMTP delay never hangs the user response.
-    if (process.env.NODE_ENV === 'production') {
-      sendResetEmail(user.email, resetUrl).catch((err) => {
-        console.error('[mailer] Background reset email error:', err);
-      });
+    // Deliver the reset link out-of-band.
+    // Trigger email sending in the background so network/SMTP latency never blocks the HTTP response.
+    sendResetEmail(user.email, resetUrl).catch((err) => {
+      console.error('[mailer] Background reset email error:', err);
+    });
+
+    const isProduction =
+      process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+
+    // Production guardrail: reset_token / reset_url must never reach the
+    // client payload on production / Render. Always return the generic message.
+    if (isProduction) {
       return res.json({
         success: true,
         message:
@@ -229,11 +234,7 @@ async function requestPasswordReset(req, res) {
       });
     }
 
-    await sendResetEmail(user.email, resetUrl);
-
-    // Only the direct TCP peer is trusted for loopback detection — never the
-    // spoofable X-Forwarded-For header. Remote clients (including production
-    // behind Cloudflare) can never pass this check.
+    // Direct loopback detection for local test suite only
     const isLoopback = isLoopbackIp(req.socket.remoteAddress || req.ip);
 
     return res.json(
