@@ -15,6 +15,17 @@ const CLOUDFLARE_IPV6_RANGES = [
   '2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32',
 ];
 
+// Private/internal networks that host infrastructure (e.g. Render's internal
+// proxy) uses to reach the app. The app cannot distinguish a request that
+// arrived via Cloudflare from one that hit the origin directly by peer IP
+// alone, so these are accepted for the CF-header check only as a practical
+// compromise for hosted deployments.
+const INTERNAL_IPV4_RANGES = [
+  '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '100.64.0.0/10',
+  '127.0.0.0/8',
+];
+const INTERNAL_IPV6_RANGES = ['::1/128', 'fc00::/7', 'fe80::/10'];
+
 function normalizeIp(ip) {
   if (!ip) return ip;
   if (ip === '::1' || ip === '::ffff:127.0.0.1') return '127.0.0.1';
@@ -76,17 +87,36 @@ function isCloudflareEdgeIp(ip) {
   return CLOUDFLARE_IPV4_RANGES.some((r) => ipInCidr(n, r));
 }
 
+function isInternalProxyIp(ip) {
+  const n = normalizeIp(ip);
+  if (!n) return false;
+  if (n.includes(':')) return INTERNAL_IPV6_RANGES.some((r) => ipInCidr(n, r));
+  return INTERNAL_IPV4_RANGES.some((r) => ipInCidr(n, r));
+}
+
+function isPublicIp(ip) {
+  const n = normalizeIp(ip);
+  if (!n || !n.includes('.')) return false;
+  return !isInternalProxyIp(n) && !isCloudflareEdgeIp(n);
+}
+
 // Returns the real client IP from Cloudflare's CF-Connecting-IP header, but only
 // when the request genuinely arrived through Cloudflare (cf-ray present AND the
-// direct peer is a Cloudflare edge IP). Otherwise returns null so the caller
-// falls back to the proxy-derived address.
+// direct peer is either a Cloudflare edge IP or the hosting platform's internal
+// proxy, e.g. Render). Otherwise returns null so the caller falls back to the
+// proxy-derived address. The direct peer is read from the socket (never the
+// spoofable X-Forwarded-For or req.ip).
 function cloudflareClientIp(req) {
   if (!req.headers['cf-ray']) return null;
-  const peer = normalizeIp(req.ip || req.socket?.remoteAddress || '');
-  if (!peer || !isCloudflareEdgeIp(peer)) return null;
+  const peer = normalizeIp(req.socket?.remoteAddress || req.connection?.remoteAddress || '');
+  if (!peer || (!isCloudflareEdgeIp(peer) && !isInternalProxyIp(peer))) return null;
   const cfIp = req.headers['cf-connecting-ip'] || req.headers['true-client-ip'];
   if (!cfIp || typeof cfIp !== 'string') return null;
-  return normalizeIp(cfIp.split(',')[0].trim());
+  const client = normalizeIp(cfIp.split(',')[0].trim());
+  // The office IP is a public address, so a private CF-Connecting-IP is a sign
+  // of a malformed/spoofed request.
+  if (!isPublicIp(client)) return null;
+  return client;
 }
 
 // When a trusted reverse proxy is configured (e.g. production/Render with
