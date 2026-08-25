@@ -481,8 +481,55 @@
             document.getElementById('daily-count-off').textContent = (kpi.holiday || 0) + (kpi.weekend || 0);
             document.getElementById('daily-report-subtitle').textContent = `Attendance status for ${data.date}`;
 
+            // Deduplicate: merge multiple logs for same employee on same day
+            const merged = new Map();
+            for (const row of rows) {
+                const key = row.email || row.name; // unique per employee
+                if (!merged.has(key)) {
+                    merged.set(key, { ...row, leave_labels: row.leave_label ? [row.leave_label] : [] });
+                } else {
+                    const m = merged.get(key);
+                    // earliest clock_in
+                    if (row.clock_in_time && new Date(row.clock_in_time) < new Date(m.clock_in_time)) {
+                        m.clock_in_time = row.clock_in_time;
+                        m.is_late = row.is_late;
+                        m.late_minutes = row.late_minutes;
+                    }
+                    // latest clock_out
+                    if (row.clock_out_time && new Date(row.clock_out_time) > new Date(m.clock_out_time || 0)) {
+                        m.clock_out_time = row.clock_out_time;
+                    }
+                    // sum duration (parse HH:MM or "Xh Ym")
+                    const parseDur = (s) => {
+                        if (!s) return 0;
+                        const parts = s.match(/(\d+)h\s*(\d+)m/);
+                        if (parts) return parseInt(parts[1]) * 60 + parseInt(parts[2]);
+                        const hm = s.split(':');
+                        if (hm.length === 2) return parseInt(hm[0]) * 60 + parseInt(hm[1]);
+                        return 0;
+                    };
+                    const fmtDur = (mins) => {
+                        const h = Math.floor(mins / 60);
+                        const m = mins % 60;
+                        return h ? `${h}h ${m}m` : `${m}m`;
+                    };
+                    m.duration = fmtDur(parseDur(m.duration) + parseDur(row.duration));
+                    // max late
+                    if (row.is_late && (row.late_minutes || 0) > (m.late_minutes || 0)) {
+                        m.is_late = true;
+                        m.late_minutes = row.late_minutes;
+                    }
+                    // collect leave labels
+                    if (row.leave_label) m.leave_labels.push(row.leave_label);
+                    // status priority: VERIFIED > PARTIAL_LEAVE > ON_LEAVE > REJECTED > ABSENT
+                    const prio = { VERIFIED: 5, PARTIAL_LEAVE: 4, ON_LEAVE: 3, REJECTED: 2, ABSENT: 1, HOLIDAY: 0, WEEKEND: 0 };
+                    if (prio[row.status] > prio[m.status]) m.status = row.status;
+                }
+            }
+            const uniqueRows = Array.from(merged.values());
+
             const tbody = document.getElementById('daily-table');
-            if (rows.length === 0) {
+            if (uniqueRows.length === 0) {
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="6" class="py-12 text-center text-slate-400">
@@ -494,11 +541,11 @@
                 return;
             }
 
-            tbody.innerHTML = rows.map(row => {
+            tbody.innerHTML = uniqueRows.map(row => {
                 const initial = (row.name || 'U').charAt(0).toUpperCase();
                 const lateText = row.is_late ? `${row.late_minutes}m` : '—';
-                const leaveLine = row.leave_label
-                    ? `<div class="text-[11px] text-indigo-600 font-semibold mt-0.5"><i class="fa-regular fa-hourglass-half mr-1"></i>${row.leave_label}</div>`
+                const leaveLine = row.leave_labels && row.leave_labels.length
+                    ? `<div class="text-[11px] text-indigo-600 font-semibold mt-0.5"><i class="fa-regular fa-hourglass-half mr-1"></i>${row.leave_labels.join(', ')}</div>`
                     : '';
                 return `
                     <tr class="hover:bg-slate-50/80 transition-colors">

@@ -318,7 +318,18 @@
                     return;
                 }
 
-                container.innerHTML = data.data.slice(0, 10).map(log => {
+                // Deduplicate by Dhaka date of clockInTime (keep latest per day)
+                const seenDates = new Set();
+                const uniqueLogs = [];
+                for (const log of data.data) {
+                    const dhakaDate = formatDhakaDate(log.clockInTime, { year: 'numeric', month: '2-digit', day: '2-digit' });
+                    if (!seenDates.has(dhakaDate)) {
+                        seenDates.add(dhakaDate);
+                        uniqueLogs.push(log);
+                    }
+                }
+                const displayLogs = uniqueLogs.slice(0, 10);
+                container.innerHTML = displayLogs.map(log => {
                     const date = formatDhakaDate(log.clockInTime, { weekday: 'short', month: 'short', day: 'numeric' });
                     const inTime = formatDhakaTime(log.clockInTime);
                     const outTime = log.clockOutTime ? formatDhakaTime(log.clockOutTime) : '—';
