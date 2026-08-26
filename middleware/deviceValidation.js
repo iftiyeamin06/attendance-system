@@ -78,11 +78,7 @@ async function deviceValidationMiddleware(req, res, next) {
   if (!user.boundDeviceId) {
     const revoked = await cache.get(`revoke_trust:${user.id}`);
     if (revoked) {
-      return res.status(403).json({
-        success: false,
-        message: 'Your device was reset by an administrator. Please register your device again.',
-        error_code: 'DEVICE_TRUST_REVOKED',
-      });
+      await cache.del(`revoke_trust:${user.id}`);
     }
 
     // First-time binding: the server issues a secret instead of trusting the
