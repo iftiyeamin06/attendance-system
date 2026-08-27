@@ -1,6 +1,6 @@
 const { User } = require('../models');
 const cache = require('../redis/cache');
-const { setTrustOnResponse } = require('../middleware/deviceTrust');
+const { setTrustOnResponse, getTrustFromRequest } = require('../middleware/deviceTrust');
 const { generateDeviceSecret, hashDeviceSecret } = require('../middleware/deviceValidation');
 
 async function registerDevice(req, res) {
@@ -21,6 +21,17 @@ async function registerDevice(req, res) {
         message: 'Device already registered to this account.',
         bound_device_id: user.boundDeviceId,
       });
+    }
+
+    if (user.boundDeviceId && user.boundDeviceId !== device_uuid) {
+      const trust = getTrustFromRequest(req);
+      if (!trust || trust.sub !== user.id) {
+        return res.status(403).json({
+          success: false,
+          message: 'Cannot re-register device from an unauthorized browser. Please use the device you originally registered, or ask an admin to reset your device.',
+          error_code: 'TRUST_COOKIE_REQUIRED',
+        });
+      }
     }
 
     const secret = generateDeviceSecret();
