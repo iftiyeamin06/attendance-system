@@ -76,6 +76,35 @@ async function deviceValidationMiddleware(req, res, next) {
     return next();
   }
 
+  // Trust cookie is valid for this user but was minted for a different device
+  // UUID (e.g., localStorage cleared, browser re-registered, admin device reset
+  // changed boundDeviceId). Since the trust cookie proves this browser was
+  // previously authorized for this account, rebind to the current device UUID.
+  if (trustActive && trust.dev !== deviceUuid) {
+    const prevDeviceId = user.boundDeviceId;
+    user.boundDeviceId = deviceUuid;
+    const rebindSecret = generateDeviceSecret();
+    user.deviceSecretHash = hashDeviceSecret(rebindSecret);
+    await user.save();
+    await cache.set(`bound_device:${user.id}`, deviceUuid, 86400);
+    setTrustOnResponse(res, user.id, deviceUuid);
+
+    console.info(
+      `[device-validation] Auto-rebinding device for ${user.email}: ` +
+      `${prevDeviceId} -> ${deviceUuid} (trust cookie provenance)`
+    );
+
+    req.deviceValidationResult = {
+      valid: true,
+      trustLevel: 'auto_rebound',
+      deviceId: deviceUuid,
+      previousDeviceId: prevDeviceId,
+      deviceSecret: rebindSecret,
+    };
+    req.trustCookie = trust;
+    return next();
+  }
+
   if (!user.boundDeviceId) {
     const revoked = await cache.get(`revoke_trust:${user.id}`);
     if (revoked) {

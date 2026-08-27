@@ -721,9 +721,28 @@ async function runTests() {
     'X-Device-UUID': 'some-other-device',
     Cookie: `device_trust=${trustToken}`,
   });
-  test('Device trust: cookie bound to another device REJECTED',
-    ciMismatch.status === 403 && ciMismatch.body.error_code === 'DEVICE_TRUST_MISMATCH',
-    `Status: ${ciMismatch.status}, Code: ${ciMismatch.body.error_code}`);
+  const mismatchCookieArr = Array.isArray(ciMismatch.headers['set-cookie'])
+    ? ciMismatch.headers['set-cookie'] : (ciMismatch.headers['set-cookie'] ? [ciMismatch.headers['set-cookie']] : []);
+  const mismatchCookieLine = mismatchCookieArr.find((c) => c.includes('device_trust=')) || '';
+  const mismatchTrustToken = mismatchCookieLine.split(';')[0].replace('device_trust=', '');
+  test('Device trust: cookie bound to different device auto-rebinds',
+    ciMismatch.status === 200 && ciMismatch.body.data?.device_trust === 'auto_rebound',
+    `Status: ${ciMismatch.status}, Trust: ${ciMismatch.body.data?.device_trust}`);
+
+  // Re-register trust-dev-001 for the recovery test below
+  // Clock out the active log from auto-rebind first
+  await request('POST', '/api/attendance/clock-out', null, {
+    Authorization: `Bearer ${token}`,
+    'X-Device-UUID': 'some-other-device',
+    Cookie: `device_trust=${mismatchTrustToken || ''}`,
+  });
+  await request('POST', `/api/admin/users/${employee.id}/reset-device`, null, {
+    Authorization: `Bearer ${adminToken}`,
+  });
+  await request('POST', '/api/device/register', {
+    device_uuid: 'trust-dev-001',
+    device_info: 'trust test device recovery',
+  }, { Authorization: `Bearer ${token}` });
 
   const ciRecovery = await request('POST', '/api/attendance/clock-in', null, {
     Authorization: `Bearer ${token}`,
