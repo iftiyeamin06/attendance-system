@@ -136,7 +136,7 @@ async function runTests() {
     { device_uuid: 'test-device-002' },
     { Authorization: `Bearer ${token}` }
   );
-  test('Re-registration with different UUID succeeds', reRegDifferent.status === 200, `Status: ${reRegDifferent.status}`);
+  test('Re-registration with different UUID blocked (no trust cookie)', reRegDifferent.status === 403, `Status: ${reRegDifferent.status}`);
 
   console.log('\n4. IP Validation (Clock-In)');
 

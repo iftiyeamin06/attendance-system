@@ -90,7 +90,7 @@
                 <table class="w-full min-w-[500px] text-left text-sm">
                     <thead class="text-[11px] uppercase tracking-wider font-semibold text-slate-400 border-b border-slate-100">
                         <tr>
-                            <th class="py-3 px-6">Date</th>
+                            <th class="py-3 px-6">Shift Date</th>
                             <th class="py-3 px-4">Time In</th>
                             <th class="py-3 px-4">Time Out</th>
                             <th class="py-3 px-4">Status</th>
@@ -319,27 +319,70 @@
                     return;
                 }
 
-                // Deduplicate by Dhaka date of clockInTime (keep latest per day)
+                // Group by shiftDate (fallback to clockInTime date in Dhaka TZ)
                 const seenDates = new Set();
                 const uniqueLogs = [];
                 for (const log of data.data) {
-                    const dhakaDate = formatDhakaDate(log.clockInTime, { year: 'numeric', month: '2-digit', day: '2-digit' });
-                    if (!seenDates.has(dhakaDate)) {
-                        seenDates.add(dhakaDate);
+                    const shiftKey = log.shiftDate || formatDhakaDate(log.clockInTime, { year: 'numeric', month: '2-digit', day: '2-digit' });
+                    if (!seenDates.has(shiftKey)) {
+                        seenDates.add(shiftKey);
                         uniqueLogs.push(log);
                     }
                 }
                 const displayLogs = uniqueLogs.slice(0, 10);
+
                 container.innerHTML = displayLogs.map(log => {
-                    const date = formatDhakaDate(log.clockInTime, { weekday: 'short', month: 'short', day: 'numeric' });
+                    // --- Shift date (logical work day) ---
+                    let shiftDateObj;
+                    if (log.shiftDate) {
+                        const [sy, sm, sd] = log.shiftDate.split('-').map(Number);
+                        shiftDateObj = new Date(sy, sm - 1, sd);
+                    } else {
+                        shiftDateObj = new Date(log.clockInTime);
+                    }
+                    const shiftDateLabel = formatDhakaDate(shiftDateObj, { weekday: 'short', month: 'short', day: 'numeric' });
+
+                    // --- Punch date (actual clock-in calendar date) ---
+                    const punchDateLabel = formatDhakaDate(log.clockInTime, { month: 'short', day: 'numeric' });
+
+                    // --- Is overnight? (punch date differs from shift date) ---
+                    const punchDateStr = formatDhakaDate(log.clockInTime, { year: 'numeric', month: '2-digit', day: '2-digit' });
+                    const shiftDateStr = log.shiftDate || punchDateStr;
+                    const isOvernight = punchDateStr !== shiftDateStr;
+
+                    // --- Is auto-closed? ---
+                    const isAutoClosed = !!log.isAutoClosed;
+
+                    // --- Times ---
                     const inTime = formatDhakaTime(log.clockInTime);
                     const outTime = log.clockOutTime ? formatDhakaTime(log.clockOutTime) : '—';
+
+                    // --- Status chip ---
                     const logStatus = (log.status || 'VERIFIED').toUpperCase();
-                    const statusChip = logStatus === 'ON_LEAVE'
-                        ? `<span class="status-chip status-chip-blue"><span class="badge-dot" style="background-color:#3b82f6"></span>On Leave</span>`
-                        : log.clockOutTime
-                        ? `<span class="status-chip status-chip-gray"><span class="badge-dot" style="background-color:#94a3b8"></span>Timed Out</span>`
-                        : `<span class="status-chip status-chip-green"><span class="badge-dot"></span>Active</span>`;
+                    let statusChip;
+                    if (logStatus === 'ON_LEAVE') {
+                        statusChip = `<span class="status-chip status-chip-blue"><span class="badge-dot" style="background-color:#3b82f6"></span>On Leave</span>`;
+                    } else if (log.clockOutTime) {
+                        statusChip = `<span class="status-chip status-chip-gray"><span class="badge-dot" style="background-color:#94a3b8"></span>Timed Out</span>`;
+                    } else {
+                        statusChip = `<span class="status-chip status-chip-green"><span class="badge-dot"></span>Active</span>`;
+                    }
+
+                    // --- Overnight tag ---
+                    const overnightTag = isOvernight
+                        ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 ml-1" title="This shift started after midnight, belonging to the previous logical work day"><i class="fa-solid fa-moon mr-0.5"></i>Overnight</span>`
+                        : '';
+
+                    // --- Auto-closed badge ---
+                    const autoClosedBadge = isAutoClosed
+                        ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 border border-amber-200 ml-1" title="Closed automatically because no manual clock-out was recorded"><i class="fa-solid fa-clock-rotate-left mr-0.5"></i>Auto-Closed</span>`
+                        : '';
+
+                    // --- Punch date sub-line (only if different from shift date) ---
+                    const punchDateSub = isOvernight
+                        ? `<div class="text-[10px] text-slate-400 font-medium mt-0.5">Punched: ${punchDateLabel}</div>`
+                        : '';
+
                     return `
                         <tr class="hover:bg-slate-50/70 transition-colors">
                             <td class="py-3.5 px-6">
@@ -347,11 +390,20 @@
                                     <div class="w-8 h-8 bg-slate-50 border border-slate-200 text-slate-500 rounded-lg flex items-center justify-center text-xs">
                                         <i class="fa-regular fa-calendar-check"></i>
                                     </div>
-                                    <span class="text-sm font-semibold text-slate-900">${date}</span>
+                                    <div>
+                                        <span class="text-sm font-semibold text-slate-900">${shiftDateLabel}</span>
+                                        ${punchDateSub}
+                                    </div>
                                 </div>
                             </td>
-                            <td class="py-3.5 px-4 text-sm font-medium text-slate-700 tabular-nums">${inTime}</td>
-                            <td class="py-3.5 px-4 text-sm font-medium text-slate-700 tabular-nums">${outTime}</td>
+                            <td class="py-3.5 px-4">
+                                <span class="text-sm font-medium text-slate-700 tabular-nums">${inTime}</span>
+                                ${overnightTag}
+                            </td>
+                            <td class="py-3.5 px-4">
+                                <span class="text-sm font-medium text-slate-700 tabular-nums">${outTime}</span>
+                                ${autoClosedBadge}
+                            </td>
                             <td class="py-3.5 px-4">${statusChip}</td>
                         </tr>
                     `;

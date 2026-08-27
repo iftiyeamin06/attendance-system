@@ -1424,7 +1424,8 @@ async function exportMonthlyReportCsv(req, res) {
       where: {
         userId: { [Op.in]: employees.map(e => e.id) },
         [Op.or]: [
-          { clockInTime: { [Op.gte]: monthStart, [Op.lte]: monthEnd } },
+          { shiftDate: { [Op.gte]: monthStartStr, [Op.lte]: monthEndStr } },
+          { shiftDate: null, clockInTime: { [Op.gte]: monthStart, [Op.lte]: monthEnd } },
           { status: 'ON_LEAVE', createdAt: { [Op.gte]: monthStart, [Op.lte]: monthEnd } },
         ],
       },
@@ -1523,24 +1524,36 @@ const partialLeaves = leaves.filter(l => l.leaveType === 'partial');
       const totalMins = Math.round(totalWorkMinutes % 60);
 
       return {
-        employee_name: emp.name,
-        employee_email: emp.email,
-        total_days_worked: present + lateCount,
-        total_hours_worked: `${totalHours}h ${totalMins}m`,
+        employee_name: emp.name || 'Unknown',
+        employee_email: emp.email || 'Unknown',
+        total_workdays: totalWorkdays,
+        days_present: present + lateCount,
+        total_hours: `${totalHours}h ${totalMins}m`,
         on_time_days: present,
         late_days: lateCount,
-        leave_days: onLeaveCount + partialLeaveCount,
-        sick_leaves: sickLeaveDays,
-        paid_leaves: paidLeaveDays,
-        unpaid_leaves: unpaidLeaveDays,
-        partial_leaves: partialLeaveCount,
+        sick_leave: sickLeaveDays,
+        paid_leave: paidLeaveDays,
+        unpaid_leave: unpaidLeaveDays,
+        partial_leave: partialLeaveCount,
         absent_days: absentCount,
-        total_workdays: totalWorkdays,
       };
     });
 
-    const fields = ['employee_name', 'employee_email', 'total_days_worked', 'total_hours_worked', 'on_time_days', 'late_days', 'sick_leaves', 'paid_leaves', 'unpaid_leaves', 'partial_leaves', 'absent_days', 'total_workdays'];
-    const parser = new Parser({ fields });
+    const fields = [
+      { label: 'Employee Name', value: 'employee_name' },
+      { label: 'Email Address', value: 'employee_email' },
+      { label: 'Total Workdays', value: 'total_workdays' },
+      { label: 'Days Present', value: 'days_present' },
+      { label: 'Total Hours', value: 'total_hours' },
+      { label: 'On-Time Days', value: 'on_time_days' },
+      { label: 'Late Days', value: 'late_days' },
+      { label: 'Sick Leave', value: 'sick_leave' },
+      { label: 'Paid Leave', value: 'paid_leave' },
+      { label: 'Unpaid Leave', value: 'unpaid_leave' },
+      { label: 'Partial Leave', value: 'partial_leave' },
+      { label: 'Absent Days', value: 'absent_days' },
+    ];
+    const parser = new Parser({ fields, delimiter: ',', quote: '"' });
     const csv = parser.parse(csvData);
 
     const monthLabel = formatMonthLabel(monthStart);
