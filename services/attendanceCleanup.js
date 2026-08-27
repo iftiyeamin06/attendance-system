@@ -33,9 +33,13 @@ async function autoCloseStaleLogs() {
     const shiftEnd = new Date(shiftEndMs);
     const now = new Date();
 
-    // Close at the earlier of the official shift end or now, to avoid
-    // setting a clock-out time in the future.
-    log.clockOutTime = shiftEnd < now ? shiftEnd : now;
+    // For overnight shifts (e.g. 20:00-05:00), the shift end may be on the
+    // next calendar day. If the shift hasn't ended yet, skip this log — it's
+    // an active overnight shift, not a stale leftover.
+    if (shiftEnd > now) continue;
+
+    // Close at the official shift end time.
+    log.clockOutTime = shiftEnd;
     log.isAutoClosed = true;
     log.notes = AUTO_CLOSE_NOTE;
     await log.save();
