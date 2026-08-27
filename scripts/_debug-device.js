@@ -1,119 +1,76 @@
 async function main() {
-  const BASE = 'https://attendance-system-rc2e.onrender.com';
-  
-  // 1. Login as superadmin
+  const BASE = 'http://localhost:3000';
+  const jar = {}; // simulate browser cookie jar
+
+  function parseCookies(headers) {
+    const setCookies = headers.getSetCookie ? headers.getSetCookie() : [];
+    for (const sc of setCookies) {
+      const [pair] = sc.split(';');
+      const [name, val] = pair.split('=');
+      jar[name.trim()] = val.trim();
+    }
+  }
+  function cookieHeader() {
+    return Object.entries(jar).map(([k, v]) => `${k}=${v}`).join('; ');
+  }
+
+  // 1. Reset device for ifti
   const saLogin = await fetch(`${BASE}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: 'superadmin@attendance.local', password: 'Superadmin#2026' }),
   });
-  const saData = await saLogin.json();
-  const saToken = saData.token;
-  console.log('1. Superadmin login:', saToken ? 'OK' : 'FAIL');
+  const sa = await saLogin.json();
+  const users = await (await fetch(`${BASE}/api/admin/users`, { headers: { Authorization: `Bearer ${sa.token}` } })).json();
+  const ifti = users.data.find(u => u.email === 'iftiyeamin06@gmail.com');
+  const resetRes = await (await fetch(`${BASE}/api/admin/users/${ifti.id}/reset-device`, {
+    method: 'POST', headers: { Authorization: `Bearer ${sa.token}` },
+  })).json();
+  console.log('1. Reset:', resetRes.message, '| closed_logs:', resetRes.closed_logs);
 
-  // 2. Find ifti user ID
-  const usersRes = await fetch(`${BASE}/api/admin/users`, {
-    headers: { 'Authorization': `Bearer ${saToken}` },
-  });
-  const usersData = await usersRes.json();
-  const ifti = usersData.data.find(u => u.email === 'iftiyeamin06@gmail.com');
-  console.log('2. ifti user:', ifti ? `${ifti.id} device=${ifti.bound_device_id}` : 'NOT FOUND');
-
-  // 3. Reset device binding for ifti
-  const resetRes = await fetch(`${BASE}/api/admin/users/${ifti.id}/reset-device`, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${saToken}` },
-  });
-  const resetData = await resetRes.json();
-  console.log('3. Reset device:', resetData.success, resetData.message);
-
-  // 4. Verify device is cleared
-  const verifyRes = await fetch(`${BASE}/api/admin/users`, {
-    headers: { 'Authorization': `Bearer ${saToken}` },
-  });
-  const verifyData = await verifyRes.json();
-  const iftiAfter = verifyData.data.find(u => u.email === 'iftiyeamin06@gmail.com');
-  console.log('4. After reset:', `${iftiAfter.email} device=${iftiAfter.bound_device_id}`);
-
-  // 5. Login as ifti
-  const iftiLogin = await fetch(`${BASE}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  // 2. Login as ifti
+  const login = await fetch(`${BASE}/api/auth/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: 'iftiyeamin06@gmail.com', password: 'pass123' }),
   });
-  const iftiData = await iftiLogin.json();
-  const iftiToken = iftiData.token;
-  console.log('5. ifti login:', iftiToken ? 'OK' : 'FAIL');
+  parseCookies(login.headers);
+  const d = await login.json();
+  const token = d.token;
+  console.log('2. Login OK');
 
-  // 6. Generate a fresh deviceId (simulating browser behavior)
-  const freshDeviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
-  console.log('6. Fresh deviceId:', freshDeviceId);
+  const freshId = 'device_fresh_' + Date.now();
 
-  // 7. Clock in (should auto-bind)
-  const clockInRes = await fetch(`${BASE}/api/attendance/clock-in`, {
-    method: 'POST',
-    headers: {
+  async function api(method, path, body) {
+    const hdrs = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${iftiToken}`,
-      'X-Device-UUID': freshDeviceId,
-    },
-    credentials: 'include',
-  });
-  const clockInData = await clockInRes.json();
-  console.log('7. Clock-in:', clockInData.success, clockInData.message);
-  if (clockInData.data) {
-    console.log('   device_id:', clockInData.data.device_id);
-    console.log('   device_secret:', clockInData.data.device_secret ? 'YES (len=' + clockInData.data.device_secret.length + ')' : 'NULL');
+      Authorization: `Bearer ${token}`,
+      'X-Device-UUID': freshId,
+      Cookie: cookieHeader(),
+    };
+    const opts = { method, headers: hdrs, credentials: 'include' };
+    if (body) opts.body = JSON.stringify(body);
+    const r = await fetch(`${BASE}${path}`, opts);
+    parseCookies(r.headers);
+    return r.json();
   }
-  
-  // Check Set-Cookie
-  const setCookie = clockInRes.headers.get('set-cookie');
-  console.log('   Set-Cookie:', setCookie ? setCookie.substring(0, 80) + '...' : 'NONE');
-  const hasTrustCookie = setCookie && setCookie.includes('device_trust');
-  console.log('   device_trust cookie set:', hasTrustCookie);
 
-  // 8. Extract the device secret from response
-  const deviceSecret = clockInData.data?.device_secret;
-  const boundDeviceId = clockInData.data?.device_id || freshDeviceId;
+  // 3. Clock in (auto-binds)
+  let r = await api('POST', '/api/attendance/clock-in');
+  console.log('3. Clock-in:', r.success, r.message || r.error_code);
 
-  // 9. Clock out WITH credentials and secret
-  const clockOutRes = await fetch(`${BASE}/api/attendance/clock-out`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${iftiToken}`,
-      'X-Device-UUID': boundDeviceId,
-      ...(deviceSecret ? { 'X-Device-Secret': deviceSecret } : {}),
-    },
-    credentials: 'include',
-  });
-  const clockOutData = await clockOutRes.json();
-  console.log('8. Clock-out:', clockOutData.success, clockOutData.message, clockOutData.error_code || '');
+  // 4. Clock out (trust cookie sent automatically)
+  r = await api('POST', '/api/attendance/clock-out');
+  console.log('4. Clock-out:', r.success, r.message || r.error_code);
 
-  // 10. Now test WITHOUT the secret header (trusting cookie only)
-  const clockIn2Res = await fetch(`${BASE}/api/attendance/clock-in`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${iftiToken}`,
-      'X-Device-UUID': boundDeviceId,
-    },
-    credentials: 'include',
-  });
-  const clockIn2Data = await clockIn2Res.json();
-  console.log('9. Second clock-in (no secret header):', clockIn2Data.success, clockIn2Data.message);
+  // 5. Clock in again
+  r = await api('POST', '/api/attendance/clock-in');
+  console.log('5. Clock-in again:', r.success, r.message || r.error_code);
 
-  const clockOut2Res = await fetch(`${BASE}/api/attendance/clock-out`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${iftiToken}`,
-      'X-Device-UUID': boundDeviceId,
-    },
-    credentials: 'include',
-  });
-  const clockOut2Data = await clockOut2Res.json();
-  console.log('10. Second clock-out (no secret header):', clockOut2Data.success, clockOut2Data.message, clockOut2Data.error_code || '');
+  // 6. Clock out again
+  r = await api('POST', '/api/attendance/clock-out');
+  console.log('6. Clock-out again:', r.success, r.message || r.error_code);
+
+  // Cleanup
+  if (!r.success) await api('POST', '/api/attendance/clock-out');
 }
 
 main().catch(e => console.error('Error:', e));

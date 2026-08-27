@@ -468,6 +468,20 @@ async function resetDevice(req, res) {
     user.deviceSecretHash = null;
     await user.save();
 
+    // Close any active attendance logs so the employee can clock out
+    // with a new device after re-registration.
+    const openLogs = await AttendanceLog.findAll({
+      where: {
+        userId: user.id,
+        clockOutTime: null,
+        isManual: { [Op.ne]: true },
+      },
+    });
+    for (const log of openLogs) {
+      log.clockOutTime = new Date();
+      await log.save();
+    }
+
     await cache.del(`bound_device:${user.id}`);
     await cache.set(`revoke_trust:${user.id}`, Date.now(), 86400);
 
@@ -475,6 +489,7 @@ async function resetDevice(req, res) {
       success: true,
       message: `Device binding reset for ${user.name}.`,
       previous_device_id: previousDevice,
+      closed_logs: openLogs.length,
     });
   } catch (err) {
     console.error('Device reset error:', err);

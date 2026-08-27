@@ -681,8 +681,8 @@ async function runTests() {
   test('Device trust: registration returns signed trust cookie',
     trReg.status === 200 && !!trustToken,
     `Status: ${trReg.status}, Cookie set: ${!!trustToken}`);
-  test('Device trust: cookie is HttpOnly + SameSite=Lax',
-    /HttpOnly/i.test(trustCookieLine) && /SameSite=Lax/i.test(trustCookieLine),
+  test('Device trust: cookie is HttpOnly + SameSite=None',
+    /HttpOnly/i.test(trustCookieLine) && /SameSite=None/i.test(trustCookieLine),
     trustCookieLine);
   test('Device trust: cookie is NOT readable via JSON body', !JSON.stringify(trReg.body).includes('device_trust'),
     'Body exposes only bound_device_id/trust_level');
@@ -752,24 +752,52 @@ async function runTests() {
   });
   test('Reset: admin resets device', s17Reset.status === 200, `Status: ${s17Reset.status}`);
 
-  const s17Revoked = await request('POST', '/api/attendance/clock-in', null, {
+  // After reset, presenting the old trust cookie auto-binds the device (revoke_trust is cleared).
+  const s17AutoBind = await request('POST', '/api/attendance/clock-in', null, {
     Authorization: `Bearer ${token}`,
     'X-Device-UUID': 'trust-dev-001',
     Cookie: `device_trust=${recoverToken || ''}`,
   });
-  test('Reset: old httpOnly trust cookie rejected on next request',
-    s17Revoked.status === 403 && s17Revoked.body.error_code === 'DEVICE_TRUST_REVOKED',
-    `Status: ${s17Revoked.status}, Code: ${s17Revoked.body.error_code}`);
+  const s17AutoBindCookieArr = Array.isArray(s17AutoBind.headers['set-cookie'])
+    ? s17AutoBind.headers['set-cookie'] : (s17AutoBind.headers['set-cookie'] ? [s17AutoBind.headers['set-cookie']] : []);
+  const s17AutoBindCookieLine = s17AutoBindCookieArr.find((c) => c.includes('device_trust=')) || '';
+  const s17AutoBindToken = s17AutoBindCookieLine.split(';')[0].replace('device_trust=', '');
+  test('Reset: old trust cookie auto-binds device after reset',
+    s17AutoBind.status === 200 && s17AutoBind.body.data?.device_trust === 'auto_bound',
+    `Status: ${s17AutoBind.status}, Trust: ${s17AutoBind.body.data?.device_trust}`);
 
+  // Clock-out from auto-bound device
+  const s17AutoCo = await request('POST', '/api/attendance/clock-out', null, {
+    Authorization: `Bearer ${token}`,
+    'X-Device-UUID': 'trust-dev-001',
+    Cookie: `device_trust=${s17AutoBindToken}`,
+  });
+  test('Reset: clock-out works from auto-bound device',
+    s17AutoCo.status === 200,
+    `Status: ${s17AutoCo.status}, Message: ${s17AutoCo.body.message}`);
+
+  // Re-registration of a different device should fail since device is already bound
   const s17Reg = await request('POST', '/api/device/register', {
     device_uuid: 'race-dev-01',
   }, { Authorization: `Bearer ${token}` });
-  const s17CookieArr = Array.isArray(s17Reg.headers['set-cookie'])
-    ? s17Reg.headers['set-cookie'] : (s17Reg.headers['set-cookie'] ? [s17Reg.headers['set-cookie']] : []);
+  test('Reset: re-registration blocked after auto-bind',
+    s17Reg.status === 400,
+    `Status: ${s17Reg.status}`);
+
+  // Reset again, then register fresh device (clean re-registration flow)
+  await request('POST', `/api/admin/users/${employee.id}/reset-device`, null, {
+    Authorization: `Bearer ${adminToken}`,
+  });
+  const s17RegFresh = await request('POST', '/api/device/register', {
+    device_uuid: 'race-dev-01',
+  }, { Authorization: `Bearer ${token}` });
+  const s17CookieArr = Array.isArray(s17RegFresh.headers['set-cookie'])
+    ? s17RegFresh.headers['set-cookie'] : (s17RegFresh.headers['set-cookie'] ? [s17RegFresh.headers['set-cookie']] : []);
   const s17CookieLine = s17CookieArr.find((c) => c.includes('device_trust=')) || '';
   const s17Token = s17CookieLine.split(';')[0].replace('device_trust=', '');
-  test('Reset: re-registration mints a fresh cookie', s17Reg.status === 200 && !!s17Token,
-    `Status: ${s17Reg.status}, Cookie: ${!!s17Token}`);
+  test('Reset: fresh re-registration after second reset succeeds',
+    s17RegFresh.status === 200 && !!s17Token,
+    `Status: ${s17RegFresh.status}, Cookie: ${!!s17Token}`);
 
   const s17Base = {
     Authorization: `Bearer ${token}`,

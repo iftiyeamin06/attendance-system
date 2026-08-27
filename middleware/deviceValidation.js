@@ -72,6 +72,7 @@ async function deviceValidationMiddleware(req, res, next) {
       trustLevel: 'trusted',
       deviceId: deviceUuid,
     };
+    req.trustCookie = trust;
     return next();
   }
 

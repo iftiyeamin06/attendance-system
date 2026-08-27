@@ -43,8 +43,8 @@ function getTrustFromRequest(req) {
 function setTrustOnResponse(res, userId, deviceUuid) {
   res.cookie(COOKIE_NAME, signTrust(userId, deviceUuid), {
     httpOnly: true,
-    secure: isProduction(),
-    sameSite: 'lax',
+    secure: true,
+    sameSite: 'none',
     maxAge: MAX_AGE_MS,
     path: '/',
   });

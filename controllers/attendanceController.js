@@ -143,11 +143,19 @@ async function clockOut(req, res) {
     }
 
     if (log.deviceIdUsed !== deviceUuid) {
-      return res.status(403).json({
-        success: false,
-        message: 'Unregistered Device. You can only clock out from your registered smartphone.',
-        error_code: 'UNREGISTERED_DEVICE',
-      });
+      // After device reset + re-bind, the trust cookie is valid but the old log
+      // still references the previous device. Allow clock-out and update the log
+      // to reflect the current (trust-verified) device.
+      const trustCookie = req.trustCookie || null;
+      if (trustCookie && trustCookie.dev === deviceUuid) {
+        log.deviceIdUsed = deviceUuid;
+      } else {
+        return res.status(403).json({
+          success: false,
+          message: 'Unregistered Device. You can only clock out from your registered smartphone.',
+          error_code: 'UNREGISTERED_DEVICE',
+        });
+      }
     }
 
     log.clockOutTime = new Date();
