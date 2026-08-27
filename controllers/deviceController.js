@@ -15,7 +15,7 @@ async function registerDevice(req, res) {
       });
     }
 
-    if (user.boundDeviceId) {
+    if (user.boundDeviceId && user.boundDeviceId === device_uuid) {
       return res.status(400).json({
         success: false,
         message: 'Device already registered to this account.',

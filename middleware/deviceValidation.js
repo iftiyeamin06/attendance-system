@@ -87,6 +87,9 @@ async function deviceValidationMiddleware(req, res, next) {
     user.deviceSecretHash = hashDeviceSecret(rebindSecret);
     await user.save();
     await cache.set(`bound_device:${user.id}`, deviceUuid, 86400);
+    // A valid, current trust cookie is authoritative for this recovery. Remove
+    // any older revocation marker so it cannot interfere with the new binding.
+    await cache.del(`revoke_trust:${user.id}`);
     setTrustOnResponse(res, user.id, deviceUuid);
 
     console.info(

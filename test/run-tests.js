@@ -125,10 +125,18 @@ async function runTests() {
   const duplicateReg = await request(
     'POST',
     '/api/device/register',
+    { device_uuid: 'test-device-001' },
+    { Authorization: `Bearer ${token}` }
+  );
+  test('Duplicate device registration blocked (same UUID)', duplicateReg.status === 400, `Status: ${duplicateReg.status}`);
+
+  const reRegDifferent = await request(
+    'POST',
+    '/api/device/register',
     { device_uuid: 'test-device-002' },
     { Authorization: `Bearer ${token}` }
   );
-  test('Duplicate device registration blocked', duplicateReg.status === 400, `Status: ${duplicateReg.status}`);
+  test('Re-registration with different UUID succeeds', reRegDifferent.status === 200, `Status: ${reRegDifferent.status}`);
 
   console.log('\n4. IP Validation (Clock-In)');
 
@@ -806,13 +814,21 @@ async function runTests() {
     s17AutoCo.status === 200,
     `Status: ${s17AutoCo.status}, Message: ${s17AutoCo.body.message}`);
 
-  // Re-registration of a different device should fail since device is already bound
+  // Re-registration of a different device is now allowed (fixes stuck users)
   const s17Reg = await request('POST', '/api/device/register', {
     device_uuid: 'race-dev-01',
   }, { Authorization: `Bearer ${token}` });
-  test('Reset: re-registration blocked after auto-bind',
-    s17Reg.status === 400,
+  test('Reset: re-registration with different UUID succeeds after auto-bind',
+    s17Reg.status === 200,
     `Status: ${s17Reg.status}`);
+
+  // Registering same UUID again should still be blocked
+  const s17RegSame = await request('POST', '/api/device/register', {
+    device_uuid: 'race-dev-01',
+  }, { Authorization: `Bearer ${token}` });
+  test('Reset: re-registration with same UUID blocked',
+    s17RegSame.status === 400,
+    `Status: ${s17RegSame.status}`);
 
   // Reset again, then register fresh device (clean re-registration flow)
   await request('POST', `/api/admin/users/${employee.id}/reset-device`, null, {

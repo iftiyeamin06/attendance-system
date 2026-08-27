@@ -384,61 +384,63 @@
             }, 5000);
         }
 
-        document.getElementById('clock-in-btn').addEventListener('click', async () => {
-            const btn = document.getElementById('clock-in-btn');
+        async function reRegisterDevice() {
+            const deviceId = ensureDeviceId();
+            const token = await getStoredToken();
+            const res = await fetch(`${API_BASE}/device/register`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({ device_uuid: deviceId, device_info: navigator.userAgent }),
+            });
+            const data = await res.json();
+            if (data.success && data.data) {
+                if (data.data.device_secret) {
+                    localStorage.setItem('deviceSecret', data.data.device_secret);
+                }
+                return true;
+            }
+            return false;
+        }
+
+        async function clockAction(endpoint, successMsg, errorMsg) {
+            const btn = document.getElementById(endpoint === 'clock-in' ? 'clock-in-btn' : 'clock-out-btn');
             btn.disabled = true;
 
             try {
-                const response = await fetchWithAuth(`${API_BASE}/attendance/clock-in`, {
-                    method: 'POST',
-                });
-                const data = await response.json();
-                if (data.success) {
-                    const returnedUuid = data.data && data.data.device_id;
-                    if (returnedUuid) {
-                        localStorage.setItem('deviceId', returnedUuid);
+                let response = await fetchWithAuth(`${API_BASE}/attendance/${endpoint}`, { method: 'POST' });
+                let data = await response.json();
+
+                if (!data.success && data.error_code && (data.error_code === 'UNREGISTERED_DEVICE' || data.error_code === 'DEVICE_TRUST_MISMATCH')) {
+                    const reRegOk = await reRegisterDevice();
+                    if (reRegOk) {
+                        response = await fetchWithAuth(`${API_BASE}/attendance/${endpoint}`, { method: 'POST' });
+                        data = await response.json();
                     }
+                }
+
+                if (data.success) {
                     const returnedSecret = data.data && data.data.device_secret;
                     if (returnedSecret) {
                         localStorage.setItem('deviceSecret', returnedSecret);
                     }
-                    showMessage('Time-in recorded successfully!', 'success');
+                    showMessage(successMsg, 'success');
                     renderTodayStatus();
                 } else {
-                    showMessage(data.message || 'Time-in failed', 'error');
+                    showMessage(data.message || errorMsg, 'error');
                 }
             } catch (err) {
                 showMessage('Network error. Please try again.', 'error');
             } finally {
                 btn.disabled = false;
             }
-        });
+        }
 
-        document.getElementById('clock-out-btn').addEventListener('click', async () => {
-            const btn = document.getElementById('clock-out-btn');
-            btn.disabled = true;
-
-            try {
-                const response = await fetchWithAuth(`${API_BASE}/attendance/clock-out`, {
-                    method: 'POST',
-                });
-                const data = await response.json();
-                if (data.success) {
-                    const returnedSecret = data.data && data.data.device_secret;
-                    if (returnedSecret) {
-                        localStorage.setItem('deviceSecret', returnedSecret);
-                    }
-                    showMessage('Time-out recorded successfully!', 'success');
-                    renderTodayStatus();
-                } else {
-                    showMessage(data.message || 'Time-out failed', 'error');
-                }
-            } catch (err) {
-                showMessage('Network error. Please try again.', 'error');
-            } finally {
-                btn.disabled = false;
-            }
-        });
+        document.getElementById('clock-in-btn').addEventListener('click', () => clockAction('clock-in', 'Time-in recorded successfully!', 'Time-in failed'));
+        document.getElementById('clock-out-btn').addEventListener('click', () => clockAction('clock-out', 'Time-out recorded successfully!', 'Time-out failed'));
 
         renderTodayStatus();
         loadHistory();
