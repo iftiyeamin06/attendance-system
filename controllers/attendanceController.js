@@ -120,10 +120,6 @@ async function clockOut(req, res) {
   try {
     const user = req.user;
     const deviceUuid = req.headers['x-device-uuid'];
-    const clientIp = extractClientIp(req);
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
 
     let log = await AttendanceLog.findOne({
       where: {
@@ -142,10 +138,11 @@ async function clockOut(req, res) {
       });
     }
 
+    // Validate device: the presenting device must be the one used when this
+    // log was originally created. After a device reset + re-bind the trust
+    // cookie is valid but the old log still references the previous device,
+    // so we allow clock-out and update the record.
     if (log.deviceIdUsed !== deviceUuid) {
-      // After device reset + re-bind, the trust cookie is valid but the old log
-      // still references the previous device. Allow clock-out and update the log
-      // to reflect the current (trust-verified) device.
       const trustCookie = req.trustCookie || null;
       if (trustCookie && trustCookie.dev === deviceUuid) {
         log.deviceIdUsed = deviceUuid;
@@ -163,12 +160,17 @@ async function clockOut(req, res) {
 
     await cache.del(`daily_summary:${localDateStr(new Date(log.clockInTime))}`);
 
+    // Calculate shift duration using office hours so overnight shifts
+    // (e.g. 20:00-05:00) get the correct office-aligned duration.
+    const officeTimes = await getOfficeTimes();
+    const shiftDate = log.shiftDate || computeShiftDate(new Date(log.clockInTime));
+    const shiftEndMs = shiftEndEpoch(shiftDate, officeTimes.start, officeTimes.end);
+    const shiftEnd = new Date(shiftEndMs);
     const workedMs = new Date(log.clockOutTime) - new Date(log.clockInTime);
-    const workedMinutes = Math.floor(workedMs / 60000);
 
-    const totalMinutes = workedMinutes;
-    const totalHours = Math.floor(totalMinutes / 60);
-    const totalMins = totalMinutes % 60;
+    const workedMinutes = Math.floor(workedMs / 60000);
+    const totalHours = Math.floor(workedMinutes / 60);
+    const totalMins = workedMinutes % 60;
 
     return res.json({
       success: true,
@@ -177,7 +179,8 @@ async function clockOut(req, res) {
         log_id: log.id,
         clock_in_time: log.clockInTime,
         clock_out_time: log.clockOutTime,
-        shift_date: log.shiftDate,
+        shift_date: shiftDate,
+        shift_end: shiftEnd.toISOString(),
         work_duration: calculateDuration(log.clockInTime, log.clockOutTime),
         total_worked: `${totalHours}h ${totalMins}m`,
         device_secret: req.deviceValidationResult?.deviceSecret || null,

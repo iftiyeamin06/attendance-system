@@ -78,6 +78,16 @@ module.exports = (sequelize, DataTypes) => {
         defaultValue: false,
         field: 'is_manual',
       },
+      isAutoClosed: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+        field: 'is_auto_closed',
+      },
+      notes: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
     },
     {
       sequelize,

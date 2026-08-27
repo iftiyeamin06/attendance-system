@@ -145,8 +145,12 @@ async function ipValidationMiddleware(req, res, next) {
     allowedIp = process.env.OFFICE_PUBLIC_IP;
   }
 
-  const allowedIps = [...new Set([allowedIp, process.env.OFFICE_PUBLIC_IP].filter(Boolean))]
-    .map(normalizeIp);
+  // DB setting is the primary source of truth. The env var is only a fallback
+  // when no DB setting has been configured yet.
+  const allowedIps = [(allowedIp || process.env.OFFICE_PUBLIC_IP)]
+    .filter(Boolean)
+    .map(normalizeIp)
+    .filter((ip, i, arr) => arr.indexOf(ip) === i);
 
   const detectedIps = candidateIps(req);
 

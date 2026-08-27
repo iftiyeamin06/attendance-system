@@ -15,6 +15,7 @@ const {
   computeShiftDate,
   addDaysToYmd,
 } = require('../utils/date');
+const { autoCloseStaleLogs } = require('../services/attendanceCleanup');
 
 function calculateDuration(clockIn, clockOut) {
   const diffMs = new Date(clockOut) - new Date(clockIn);
@@ -273,6 +274,9 @@ async function adminDashboard(req, res) {
     const todayStr = localDateStr(targetDate);
     const { start: dayStart, end: dayEnd } = zonedDayRange(targetDate);
 
+    // Ensure stale logs are closed before building the dashboard
+    await autoCloseStaleLogs();
+
     const cacheKey = `daily_summary:${todayStr}`;
     let dailyLogs = refresh === 'true' ? null : await cache.get(cacheKey);
 
@@ -375,6 +379,7 @@ async function adminDashboard(req, res) {
           shift_date: log.shiftDate,
           manual_status: log.manualStatus,
           is_manual: log.isManual,
+          is_auto_closed: log.isAutoClosed,
           edit_reason: log.editReason,
           edited_by: log.editedBy,
         };
@@ -1202,6 +1207,8 @@ async function getAllEmployeesMonthlySummary(req, res) {
   try {
     const { month, year } = req.query;
 
+    await autoCloseStaleLogs();
+
     const now = new Date();
     const targetMonth = month ? parseInt(month) - 1 : now.getMonth();
     const targetYear = year ? parseInt(year) : now.getFullYear();
@@ -1558,6 +1565,8 @@ function leaveLabel(type) {
 }
 
 async function buildDailyReportData(dateStr) {
+  await autoCloseStaleLogs();
+
   const targetDate = dateStr ? new Date(dateStr) : new Date();
   const todayStr = localDateStr(targetDate);
   const { start: dayStart, end: dayEnd } = zonedDayRange(targetDate);
@@ -1655,6 +1664,7 @@ async function buildDailyReportData(dateStr) {
       duration,
       is_late: isLate,
       late_minutes: lateMinutes,
+      is_auto_closed: log ? log.isAutoClosed : false,
     };
   });
 

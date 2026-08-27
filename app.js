@@ -393,6 +393,19 @@ async function startServer() {
         `ALTER TYPE "enum_users_role" ADD VALUE IF NOT EXISTS 'superadmin'`
       );
 
+      // Auto-close columns for attendance_logs
+      await sequelize.query(
+        'ALTER TABLE attendance_logs ADD COLUMN IF NOT EXISTS is_auto_closed BOOLEAN NOT NULL DEFAULT FALSE'
+      );
+      await sequelize.query(
+        'ALTER TABLE attendance_logs ADD COLUMN IF NOT EXISTS notes TEXT'
+      );
+
+      // Allow null admin_id in audit_logs (e.g., system-initiated auto-close)
+      await sequelize.query(
+        'ALTER TABLE audit_logs ALTER COLUMN admin_id DROP NOT NULL'
+      );
+
       // Ensure a default Super Admin exists for system setup (idempotent).
       const superAdmin = await User.findOne({
         where: { email: 'superadmin@attendance.local' },
@@ -428,6 +441,10 @@ async function startServer() {
       console.log(`Attendance System running on http://localhost:${PORT}`);
       console.log(`Office Public IP: ${process.env.OFFICE_PUBLIC_IP || 'not set'}`);
       console.log(`Timezone: ${process.env.ATTENDANCE_TIME_ZONE || 'Asia/Dhaka'}`);
+
+      // Start background auto-close scheduler
+      const { startCron } = require('./bin/cron');
+      startCron();
     });
   } catch (err) {
     console.error('Failed to start server:', err);

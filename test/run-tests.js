@@ -131,6 +131,12 @@ async function runTests() {
   test('Duplicate device registration blocked', duplicateReg.status === 400, `Status: ${duplicateReg.status}`);
 
   console.log('\n4. IP Validation (Clock-In)');
+
+  // Temporarily set office IP to a wrong value to truly test IP blocking
+  await request('POST', '/api/admin/settings/ip', { office_public_ip: '10.99.99.99' }, {
+    Authorization: `Bearer ${superAdminToken}`,
+  });
+
   const clockInWrongIp = await request(
     'POST',
     '/api/attendance/clock-in',
@@ -140,13 +146,18 @@ async function runTests() {
   test('Clock-in blocked - wrong IP', clockInWrongIp.status === 403,
     `Status: ${clockInWrongIp.status}, Message: ${clockInWrongIp.body.message}`);
 
+  // Restore office IP for remaining tests
+  await request('POST', '/api/admin/settings/ip', { office_public_ip: '127.0.0.1' }, {
+    Authorization: `Bearer ${superAdminToken}`,
+  });
+
   const clockInWrongDevice = await request(
     'POST',
     '/api/attendance/clock-in',
     null,
     { Authorization: `Bearer ${token}`, 'X-Device-UUID': 'wrong-device' }
   );
-  test('Clock-in blocked - wrong device (IP check fails first)', clockInWrongDevice.status === 403,
+  test('Clock-in blocked - wrong device', clockInWrongDevice.status === 403,
     `Status: ${clockInWrongDevice.status}, Message: ${clockInWrongDevice.body.message}`);
 
   console.log('\n5. Admin Panel');
@@ -874,6 +885,69 @@ async function runTests() {
   test('Conflict: workdays restored after cleanup',
     hol17Restored.body.data.summary.total_workdays === h17Workdays,
     `Status: ${hol17Restored.status}`);
+
+  console.log('\n18. Auto-Close Stale Logs\n');
+
+  // AttendanceLog already imported at line 245
+
+  // Create a stale clock-in (yesterday's shift) that was never clocked out
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = (await import('../utils/date.js')).localDateStr(yesterday);
+
+  const yesterdayClockIn = new Date(yesterday);
+  yesterdayClockIn.setHours(9, 0, 0, 0);
+
+  const staleRecord = await AttendanceLog.create({
+    userId: employee.id,
+    clockInTime: yesterdayClockIn,
+    clockOutTime: null,
+    shiftDate: yesterdayStr,
+    ipAddress: '127.0.0.1',
+    deviceIdUsed: 'TEST_DEVICE',
+    status: 'VERIFIED',
+    isManual: false,
+    isAutoClosed: false,
+  });
+  const staleLogId = staleRecord.id;
+  test('Auto-close: create stale open log for yesterday',
+    !!staleLogId,
+    `ID: ${staleLogId}, shiftDate: ${yesterdayStr}`);
+
+  // Execute autoCloseStaleLogs via the admin dashboard (which calls it internally)
+  const dashAfter = await request('GET', `/api/admin/dashboard?date=${dateStr}&refresh=true`, null, {
+    Authorization: `Bearer ${adminToken}`,
+  });
+  test('Auto-close: admin dashboard loads after auto-close',
+    dashAfter.status === 200,
+    `Status: ${dashAfter.status}`);
+
+  // Verify the stale log was closed
+  const closedLog = await AttendanceLog.findByPk(staleLogId);
+  test('Auto-close: stale log has clockOutTime set',
+    closedLog !== null && closedLog.clockOutTime !== null,
+    `clockOutTime: ${closedLog?.clockOutTime}`);
+  test('Auto-close: is_auto_closed flag is true',
+    closedLog !== null && closedLog.isAutoClosed === true,
+    `isAutoClosed: ${closedLog?.isAutoClosed}`);
+  test('Auto-close: notes field is set',
+    closedLog !== null && closedLog.notes && closedLog.notes.includes('Auto-closed'),
+    `notes: ${closedLog?.notes}`);
+
+  // Verify audit log was created
+  const { AuditLog } = require('../models');
+  const auditEntry = await AuditLog.findOne({
+    where: { targetUserId: employee.id, action: 'AUTO_CLOSE_STALE_LOG' },
+    order: [['createdAt', 'DESC']],
+  });
+  test('Auto-close: audit log entry exists',
+    auditEntry !== null,
+    `Audit ID: ${auditEntry?.id}`);
+
+  // Cleanup: delete the stale log
+  await request('DELETE', `/api/admin/attendance/logs/${staleLogId}`, null, {
+    Authorization: `Bearer ${adminToken}`,
+  });
 
   console.log('\n13b. Fixture Cleanup\n');
   if (officeIpBefore) {
