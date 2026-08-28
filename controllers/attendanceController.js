@@ -69,7 +69,7 @@ async function clockIn(req, res) {
       return { log, autoClosedLog };
     });
 
-    await cache.del(`daily_summary:${localDateStr(today)}`);
+    await cache.del(`daily_summary:${todayStr}`);
 
     return res.status(200).json({
       success: true,
@@ -94,8 +94,8 @@ async function clockIn(req, res) {
         shift_date: err.log.shiftDate,
       });
     }
-    console.error('Clock-in error:', err.message, err.stack);
-    return res.status(500).json({ success: false, message: 'An error occurred during clock-in.', debug: err.message });
+    console.error('Clock-in error:', err);
+    return res.status(500).json({ success: false, message: 'An error occurred during clock-in.' });
   }
 }
 
