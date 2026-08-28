@@ -161,8 +161,6 @@ async function ipValidationMiddleware(req, res, next) {
       success: false,
       message: 'Clock-in failed. Please connect to the Official Office Wi-Fi.',
       error_code: 'OFFICE_IP_MISMATCH',
-      detected_ips: detectedIps,
-      allowed_ips: allowedIps,
     });
   }
 
@@ -184,18 +182,12 @@ function extractClientIp(req) {
     );
   }
 
-  // No trusted proxy: the socket address is the direct client. X-Forwarded-For
-  // is only a fallback for deployments sitting behind a proxy the app does not
-  // trust (where it cannot be used as a security boundary anyway).
-  const forwarded = req.headers['x-forwarded-for'];
-  if (forwarded && typeof forwarded === 'string') {
-    const first = forwarded.split(',')[0].trim();
-    if (first) return normalizeIp(first);
-  }
+  // No trusted proxy: only the direct socket peer is trustworthy.
+  // X-Forwarded-For is client-controlled and must never be used as a fallback
+  // for the office-IP check — otherwise any attacker can spoof the office IP.
   return normalizeIp(
-    req.ip ||
-    req.connection?.remoteAddress ||
     req.socket?.remoteAddress ||
+    req.connection?.remoteAddress ||
     req.connection?.socket?.remoteAddress ||
     'unknown'
   );
@@ -212,13 +204,7 @@ function candidateIps(req) {
     return candidates;
   }
 
-  const forwarded = req.headers['x-forwarded-for'];
-  if (forwarded && typeof forwarded === 'string') {
-    forwarded.split(',').forEach((p) => {
-      const ip = normalizeIp(p.trim());
-      if (ip && ip !== 'unknown' && !candidates.includes(ip)) candidates.push(ip);
-    });
-  }
+  // No trusted proxy: X-Forwarded-For is untrusted and must not be added.
   const local = extractClientIp(req);
   if (local && !candidates.includes(local)) candidates.push(local);
   return candidates;

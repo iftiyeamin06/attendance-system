@@ -35,7 +35,6 @@ app.use(
         scriptSrc: [
           "'self'",
           "'unsafe-inline'",
-          "'unsafe-eval'",
           'https://cdn.tailwindcss.com',
           'https://cdnjs.cloudflare.com',
         ],
@@ -420,10 +419,7 @@ async function startServer() {
           ),
           role: 'superadmin',
         });
-        console.log(
-          'Super Admin created: superadmin@attendance.local / ' +
-            (process.env.SUPERADMIN_PASSWORD || 'Superadmin#2026')
-        );
+        console.log('Super Admin created: superadmin@attendance.local');
       }
 
       console.log('Database migrations applied.');

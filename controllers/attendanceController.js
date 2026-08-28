@@ -6,17 +6,12 @@ const { Op } = require('sequelize');
 const { localDateStr, computeShiftDate, deadlineEpoch, shiftEndEpoch, zonedDayRange } = require('../utils/date');
 
 async function clockIn(req, res) {
+  const { sequelize } = require('../models');
   try {
     const user = req.user;
     const deviceUuid = req.headers['x-device-uuid'];
-
     const clientIp = extractClientIp(req);
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const todayStr = localDateStr(today);
-
+    const todayStr = localDateStr(new Date());
     const shiftDate = computeShiftDate(new Date());
 
     const todayLeave = await Leave.findOne({
@@ -28,61 +23,50 @@ async function clockIn(req, res) {
         endDate: { [Op.gte]: todayStr },
       },
     });
-
     if (todayLeave) {
-      return res.status(400).json({
-        success: false,
-        message: 'You are currently marked as On Leave today.',
-      });
+      return res.status(400).json({ success: false, message: 'You are currently marked as On Leave today.' });
     }
 
-    const activeLog = await AttendanceLog.findOne({
-      where: {
-        userId: user.id,
-        status: 'VERIFIED',
-        clockOutTime: null,
-        isManual: { [Op.ne]: true },
-      },
-      order: [['clockInTime', 'DESC']],
-    });
+    // Serialize clock-in per user to prevent duplicate logs on double-tap / concurrent requests
+    const result = await sequelize.transaction(async (t) => {
+      const activeLog = await AttendanceLog.findOne({
+        where: { userId: user.id, status: 'VERIFIED', clockOutTime: null, isManual: { [Op.ne]: true } },
+        order: [['clockInTime', 'DESC']],
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
 
-    let autoClosedLog = null;
-    if (activeLog) {
-      const activeShift = activeLog.shiftDate || computeShiftDate(new Date(activeLog.clockInTime));
-
-      if (activeShift === shiftDate) {
-        return res.status(409).json({
-          success: false,
-          message: 'You already have an active clock-in. Please clock out before starting a new shift.',
-          log_id: activeLog.id,
-          clock_in_time: activeLog.clockInTime,
-          shift_date: activeLog.shiftDate,
-        });
+      let autoClosedLog = null;
+      if (activeLog) {
+        const activeShift = activeLog.shiftDate || computeShiftDate(new Date(activeLog.clockInTime));
+        if (activeShift === shiftDate) {
+          const err = new Error('ALREADY_CLOCKED_IN');
+          err.code = 'ALREADY_CLOCKED_IN';
+          err.log = activeLog;
+          throw err;
+        }
+        const officeTimes = await getOfficeTimes();
+        const [startH, startM] = officeTimes.start.split(':').map(Number);
+        const [endH, endM] = officeTimes.end.split(':').map(Number);
+        const prevShiftEnd = Number.isInteger(endH) && Number.isInteger(endM) && Number.isInteger(startH) && Number.isInteger(startM)
+          ? new Date(shiftEndEpoch(activeShift, officeTimes.start, officeTimes.end))
+          : new Date();
+        activeLog.clockOutTime = prevShiftEnd.getTime() < Date.now() ? prevShiftEnd : new Date();
+        await activeLog.save({ transaction: t });
+        autoClosedLog = activeLog;
+        await cache.del(`daily_summary:${activeShift}`);
       }
 
-      // Stale open log from a previous shift: auto-close it at that shift's end
-      // time (or now if the shift end is still in the future) so a new clock-in
-      // is allowed.
-      const officeTimes = await getOfficeTimes();
-      const [startH, startM] = officeTimes.start.split(':').map(Number);
-      const [endH, endM] = officeTimes.end.split(':').map(Number);
-      const prevShiftEnd = Number.isInteger(endH) && Number.isInteger(endM) && Number.isInteger(startH) && Number.isInteger(startM)
-        ? new Date(shiftEndEpoch(activeShift, officeTimes.start, officeTimes.end))
-        : new Date();
+      const log = await AttendanceLog.create({
+        userId: user.id,
+        clockInTime: new Date(),
+        shiftDate,
+        ipAddress: clientIp,
+        deviceIdUsed: deviceUuid,
+        status: 'VERIFIED',
+      }, { transaction: t });
 
-      activeLog.clockOutTime = prevShiftEnd.getTime() < Date.now() ? prevShiftEnd : new Date();
-      await activeLog.save();
-      autoClosedLog = activeLog;
-      await cache.del(`daily_summary:${activeShift}`);
-    }
-
-    const log = await AttendanceLog.create({
-      userId: user.id,
-      clockInTime: new Date(),
-      shiftDate,
-      ipAddress: clientIp,
-      deviceIdUsed: deviceUuid,
-      status: 'VERIFIED',
+      return { log, autoClosedLog };
     });
 
     await cache.del(`daily_summary:${localDateStr(today)}`);
@@ -91,72 +75,63 @@ async function clockIn(req, res) {
       success: true,
       message: 'Clock-in recorded successfully.',
       data: {
-        log_id: log.id,
-        clock_in_time: log.clockInTime,
-        ip_address: log.ipAddress,
-        device_id: log.deviceIdUsed,
+        log_id: result.log.id,
+        clock_in_time: result.log.clockInTime,
+        ip_address: result.log.ipAddress,
+        device_id: result.log.deviceIdUsed,
         device_secret: req.deviceValidationResult?.deviceSecret || null,
         device_trust: req.deviceValidationResult?.trustLevel || 'trusted',
-        auto_closed_log: autoClosedLog
-          ? {
-              log_id: autoClosedLog.id,
-              clock_in_time: autoClosedLog.clockInTime,
-              clock_out_time: autoClosedLog.clockOutTime,
-              shift_date: autoClosedLog.shiftDate,
-            }
-          : null,
+        auto_closed_log: result.autoClosedLog ? { log_id: result.autoClosedLog.id, clock_in_time: result.autoClosedLog.clockInTime, clock_out_time: result.autoClosedLog.clockOutTime, shift_date: result.autoClosedLog.shiftDate } : null,
       },
     });
   } catch (err) {
+    if (err.code === 'ALREADY_CLOCKED_IN') {
+      return res.status(409).json({
+        success: false,
+        message: 'You already have an active clock-in. Please clock out before starting a new shift.',
+        log_id: err.log.id,
+        clock_in_time: err.log.clockInTime,
+        shift_date: err.log.shiftDate,
+      });
+    }
     console.error('Clock-in error:', err);
-    return res.status(500).json({
-      success: false,
-      message: 'An error occurred during clock-in.',
-    });
+    return res.status(500).json({ success: false, message: 'An error occurred during clock-in.' });
   }
 }
 
 async function clockOut(req, res) {
+  const { sequelize } = require('../models');
   try {
     const user = req.user;
     const deviceUuid = req.headers['x-device-uuid'];
 
-    let log = await AttendanceLog.findOne({
-      where: {
-        userId: user.id,
-        status: 'VERIFIED',
-        clockOutTime: null,
-        isManual: { [Op.ne]: true },
-      },
-      order: [['clockInTime', 'DESC']],
-    });
-
-    if (!log) {
-      return res.status(400).json({
-        success: false,
-        message: 'No active clock-in found.',
+    const result = await sequelize.transaction(async (t) => {
+      const log = await AttendanceLog.findOne({
+        where: { userId: user.id, status: 'VERIFIED', clockOutTime: null, isManual: { [Op.ne]: true } },
+        order: [['clockInTime', 'DESC']],
+        transaction: t,
+        lock: t.LOCK.UPDATE,
       });
-    }
-
-    // Validate device: the presenting device must be the one used when this
-    // log was originally created. After a device reset + re-bind the trust
-    // cookie is valid but the old log still references the previous device,
-    // so we allow clock-out and update the record.
-    if (log.deviceIdUsed !== deviceUuid) {
-      const trustCookie = req.trustCookie || null;
-      if (trustCookie && trustCookie.dev === deviceUuid) {
-        log.deviceIdUsed = deviceUuid;
-      } else {
-        return res.status(403).json({
-          success: false,
-          message: 'Unregistered Device. You can only clock out from your registered smartphone.',
-          error_code: 'UNREGISTERED_DEVICE',
-        });
+      if (!log) {
+        const err = new Error('NO_ACTIVE_LOG');
+        err.code = 'NO_ACTIVE_LOG';
+        throw err;
       }
-    }
-
-    log.clockOutTime = new Date();
-    await log.save();
+      if (log.deviceIdUsed !== deviceUuid) {
+        const trustCookie = req.trustCookie || null;
+        if (trustCookie && trustCookie.dev === deviceUuid) {
+          log.deviceIdUsed = deviceUuid;
+        } else {
+          const err = new Error('UNREGISTERED_DEVICE');
+          err.code = 'UNREGISTERED_DEVICE';
+          throw err;
+        }
+      }
+      log.clockOutTime = new Date();
+      await log.save({ transaction: t });
+      return log;
+    });
+    const log = result;
 
     await cache.del(`daily_summary:${localDateStr(new Date(log.clockInTime))}`);
 
@@ -188,16 +163,20 @@ async function clockOut(req, res) {
       },
     });
   } catch (err) {
+    if (err.code === 'NO_ACTIVE_LOG') {
+      return res.status(400).json({ success: false, message: 'No active clock-in found.' });
+    }
+    if (err.code === 'UNREGISTERED_DEVICE') {
+      return res.status(403).json({ success: false, message: 'Unregistered Device. You can only clock out from your registered smartphone.', error_code: 'UNREGISTERED_DEVICE' });
+    }
     console.error('Clock-out error:', err);
-    return res.status(500).json({
-      success: false,
-      message: 'An error occurred during clock-out.',
-    });
+    return res.status(500).json({ success: false, message: 'An error occurred during clock-out.' });
   }
 }
 
 function calculateDuration(clockIn, clockOut) {
   const diffMs = new Date(clockOut) - new Date(clockIn);
+  if (diffMs <= 0) return '0h 0m';
   const hours = Math.floor(diffMs / 3600000);
   const minutes = Math.floor((diffMs % 3600000) / 60000);
   return `${hours}h ${minutes}m`;
@@ -206,10 +185,7 @@ function calculateDuration(clockIn, clockOut) {
 async function getTodayStatus(req, res) {
   try {
     const user = req.user;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const todayStr = localDateStr(today);
+    const todayStr = localDateStr(new Date());
     const targetShiftDate = computeShiftDate(new Date());
 
     const onLeaveLog = await AttendanceLog.findOne({
@@ -343,6 +319,7 @@ async function getAttendanceLogs(req, res) {
     const where = { userId: user.id };
 
     if (date) {
+      if (isNaN(new Date(date).getTime())) return res.status(400).json({ success: false, message: 'Invalid date. Use YYYY-MM-DD.' });
       const { start: dayStart, end: dayEnd } = zonedDayRange(new Date(date));
       where.clockInTime = {
         [Op.gte]: dayStart,

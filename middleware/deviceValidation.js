@@ -77,35 +77,18 @@ async function deviceValidationMiddleware(req, res, next) {
   }
 
   // Trust cookie is valid for this user but was minted for a different device
-  // UUID (e.g., localStorage cleared, browser re-registered, admin device reset
-  // changed boundDeviceId). Since the trust cookie proves this browser was
-  // previously authorized for this account, rebind to the current device UUID.
+  // UUID. Do NOT auto-rebind here — a stolen trust cookie would otherwise
+  // let an attacker hijack the binding by presenting any X-Device-UUID.
+  // The legitimate recovery path is POST /api/device/register which
+  // validates the trust cookie explicitly; clock-in/out must re-register first.
   if (trustActive && trust.dev !== deviceUuid) {
-    const prevDeviceId = user.boundDeviceId;
-    user.boundDeviceId = deviceUuid;
-    const rebindSecret = generateDeviceSecret();
-    user.deviceSecretHash = hashDeviceSecret(rebindSecret);
-    await user.save();
-    await cache.set(`bound_device:${user.id}`, deviceUuid, 86400);
-    // A valid, current trust cookie is authoritative for this recovery. Remove
-    // any older revocation marker so it cannot interfere with the new binding.
-    await cache.del(`revoke_trust:${user.id}`);
-    setTrustOnResponse(res, user.id, deviceUuid);
-
-    console.info(
-      `[device-validation] Auto-rebinding device for ${user.email}: ` +
-      `${prevDeviceId} -> ${deviceUuid} (trust cookie provenance)`
-    );
-
-    req.deviceValidationResult = {
-      valid: true,
-      trustLevel: 'auto_rebound',
-      deviceId: deviceUuid,
-      previousDeviceId: prevDeviceId,
-      deviceSecret: rebindSecret,
-    };
-    req.trustCookie = trust;
-    return next();
+    return res.status(403).json({
+      success: false,
+      message: 'Device trust token does not match this device. Please re-register your device.',
+      error_code: 'DEVICE_TRUST_MISMATCH',
+      device_id: deviceUuid,
+      registered_device_id: trust.dev,
+    });
   }
 
   if (!user.boundDeviceId) {
@@ -183,24 +166,11 @@ async function deviceValidationMiddleware(req, res, next) {
   }
 
   if (!verifyDeviceSecret(presentedSecret, user.deviceSecretHash)) {
-    // Device UUID matches but secret is stale/missing (e.g., browser localStorage
-    // corruption, device reset + re-bind, or new session). Since the IP is already
-    // validated (middleware order) and the device UUID matches the bound device,
-    // issue a fresh secret + trust cookie as recovery.
-    const newSecret = generateDeviceSecret();
-    user.deviceSecretHash = hashDeviceSecret(newSecret);
-    await user.save();
-    setTrustOnResponse(res, user.id, deviceUuid);
-
-    req.deviceValidationResult = {
-      valid: true,
-      trustLevel: 'recovered',
-      reason: 'SECRET_MISMATCH_REISSUED',
-      deviceId: deviceUuid,
-      registeredDeviceId: boundDeviceId,
-      deviceSecret: newSecret,
-    };
-    return next();
+    return res.status(403).json({
+      success: false,
+      message: 'Device verification failed. Please re-register your device.',
+      error_code: 'DEVICE_SECRET_MISMATCH',
+    });
   }
 
   setTrustOnResponse(res, user.id, deviceUuid);

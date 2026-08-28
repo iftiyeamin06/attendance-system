@@ -19,6 +19,7 @@ const { autoCloseStaleLogs } = require('../services/attendanceCleanup');
 
 function calculateDuration(clockIn, clockOut) {
   const diffMs = new Date(clockOut) - new Date(clockIn);
+  if (diffMs <= 0) return '0h 0m';
   const hours = Math.floor(diffMs / 3600000);
   const minutes = Math.floor((diffMs % 3600000) / 60000);
   return `${hours}h ${minutes}m`;
@@ -269,6 +270,9 @@ async function getUserDeviceBinding(req, res) {
 async function adminDashboard(req, res) {
   try {
     const { date, refresh } = req.query;
+    if (date && isNaN(new Date(date).getTime())) {
+      return res.status(400).json({ success: false, message: 'Invalid date format. Use YYYY-MM-DD.' });
+    }
     const today = new Date();
     const targetDate = date ? new Date(date) : today;
     const todayStr = localDateStr(targetDate);
@@ -473,17 +477,26 @@ async function resetDevice(req, res) {
     user.deviceSecretHash = null;
     await user.save();
 
-    // Close any active attendance logs so the employee can clock out
-    // with a new device after re-registration.
+    // Close any active attendance logs so the employee can clock in/out
+    // with a new device after re-registration. Use shift end time when overdue.
     const openLogs = await AttendanceLog.findAll({
       where: {
         userId: user.id,
         clockOutTime: null,
-        isManual: { [Op.ne]: true },
+        isManual: false,
       },
     });
+    const { shiftEndEpoch } = require('../utils/date');
+    const officeTimes = await require('./leaveController').getOfficeTimes();
     for (const log of openLogs) {
-      log.clockOutTime = new Date();
+      const shiftDate = log.shiftDate || require('../utils/date').computeShiftDate(new Date(log.clockInTime));
+      const shiftEnd = new Date(shiftEndEpoch(shiftDate, officeTimes.start, officeTimes.end));
+      const now = new Date();
+      // If overnight shift still active, keep it open for new device to clock out; otherwise close at shift end
+      if (shiftEnd > now) continue;
+      log.clockOutTime = shiftEnd;
+      log.isAutoClosed = true;
+      log.notes = log.notes ? `${log.notes}; Device reset auto-close` : 'Device reset auto-close';
       await log.save();
     }
 
@@ -618,6 +631,10 @@ async function addManualPunch(req, res) {
     const user = await User.findByPk(user_id);
     if (!user) {
       return res.status(404).json({ success: false, message: 'Employee not found.' });
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(shift_date)) {
+      return res.status(400).json({ success: false, message: 'Invalid shift_date. Use YYYY-MM-DD.' });
     }
 
     let clockInTime = combineDateAndTime(shift_date, clock_in);
@@ -824,7 +841,16 @@ async function deleteAttendanceLog(req, res) {
     }
 
     const date = log.shiftDate || (log.clockInTime ? localDateStr(log.clockInTime) : null);
-    await log.destroy();
+    const { sequelize } = require('../models');
+    await sequelize.transaction(async (t) => {
+      await require('../models').AuditLog.create({
+        adminId: req.user.id,
+        action: 'DELETE_ATTENDANCE_LOG',
+        targetUserId: log.userId,
+        details: JSON.stringify({ log_id: log.id, shift_date: log.shiftDate, clock_in: log.clockInTime }),
+      }, { transaction: t });
+      await log.destroy({ transaction: t });
+    });
     if (date) await cache.del(`daily_summary:${date}`);
 
     return res.json({ success: true, message: 'Attendance record deleted.' });
@@ -840,6 +866,10 @@ async function deleteAttendanceLog(req, res) {
 async function exportCsv(req, res) {
   try {
     const { startDate, endDate } = req.query;
+    const ymdRe = /^\d{4}-\d{2}-\d{2}$/;
+    if ((startDate && !ymdRe.test(startDate)) || (endDate && !ymdRe.test(endDate))) {
+      return res.status(400).json({ success: false, message: 'Invalid date. Use YYYY-MM-DD.' });
+    }
 
     const where = {};
     const legacyClockInWhere = {};
@@ -1051,10 +1081,6 @@ async function getEmployeeMonthlySummary(req, res) {
         clockOut = dayLog.clockOutTime;
         status = dayLog.status;
 
-        if (dayPartial) {
-          partialLeaveDays++;
-        }
-
         if (clockIn) {
           const shiftDate = dayLog.shiftDate || localDateStr(new Date(clockIn));
           const deadline = new Date(deadlineEpoch(shiftDate, startH, startM + graceMinutes));
@@ -1094,6 +1120,8 @@ async function getEmployeeMonthlySummary(req, res) {
       } else {
         absent++;
       }
+
+      if (dayPartial) partialLeaveDays++;
 
       dailyBreakdown.push({
         date: dateStr,
@@ -1185,10 +1213,19 @@ async function deleteUser(req, res) {
       });
     }
 
+    const { sequelize } = require('../models');
+    await sequelize.transaction(async (t) => {
+      await AttendanceLog.destroy({ where: { userId }, transaction: t });
+      await Leave.destroy({ where: { userId }, transaction: t });
+      await user.destroy({ transaction: t });
+      await require('../models').AuditLog.create({
+        adminId: req.user.id,
+        action: 'DELETE_USER',
+        targetUserId: userId,
+        details: JSON.stringify({ email: user.email, role: user.role }),
+      }, { transaction: t });
+    });
     await cache.del(`bound_device:${userId}`);
-    await AttendanceLog.destroy({ where: { userId } });
-    await Leave.destroy({ where: { userId } });
-    await user.destroy();
 
     return res.status(200).json({
       success: true,
@@ -1499,8 +1536,7 @@ const partialLeaves = leaves.filter(l => l.leaveType === 'partial');
           } else if (dayLog.manualStatus === 'PRESENT') {
             present++;
           } else if (clockIn) {
-            const deadline = new Date(d);
-            deadline.setHours(startH, startM + graceMinutes, 0, 0);
+            const deadline = new Date(deadlineEpoch(dateStr, startH, startM + graceMinutes));
             if (clockIn > deadline) {
               lateCount++;
             } else {

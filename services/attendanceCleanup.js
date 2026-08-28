@@ -17,8 +17,11 @@ async function autoCloseStaleLogs() {
   const staleLogs = await AttendanceLog.findAll({
     where: {
       clockOutTime: null,
-      shiftDate: { [Op.lt]: todayStr },
-      isManual: { [Op.ne]: true },
+      [Op.or]: [
+        { shiftDate: { [Op.lt]: todayStr } },
+        { shiftDate: null, clockInTime: { [Op.lt]: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+      ],
+      isManual: false,
     },
     order: [['clockInTime', 'ASC']],
   });
@@ -38,10 +41,10 @@ async function autoCloseStaleLogs() {
     // an active overnight shift, not a stale leftover.
     if (shiftEnd > now) continue;
 
-    // Close at the official shift end time.
+    // Close at the official shift end time. Preserve existing notes.
     log.clockOutTime = shiftEnd;
     log.isAutoClosed = true;
-    log.notes = AUTO_CLOSE_NOTE;
+    log.notes = log.notes ? `${log.notes}; ${AUTO_CLOSE_NOTE}` : AUTO_CLOSE_NOTE;
     await log.save();
 
     // Audit trail

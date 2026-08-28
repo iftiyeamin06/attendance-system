@@ -466,7 +466,7 @@
                 let response = await fetchWithAuth(`${API_BASE}/attendance/${endpoint}`, { method: 'POST' });
                 let data = await response.json();
 
-                if (!data.success && data.error_code && (data.error_code === 'UNREGISTERED_DEVICE' || data.error_code === 'DEVICE_TRUST_MISMATCH')) {
+                if (!data.success && data.error_code && (data.error_code === 'UNREGISTERED_DEVICE' || data.error_code === 'DEVICE_TRUST_MISMATCH' || data.error_code === 'DEVICE_SECRET_MISMATCH')) {
                     const reRegOk = await reRegisterDevice();
                     if (reRegOk) {
                         response = await fetchWithAuth(`${API_BASE}/attendance/${endpoint}`, { method: 'POST' });
