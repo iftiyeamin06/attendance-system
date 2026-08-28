@@ -154,6 +154,14 @@
             partial: 'bg-purple-50 text-purple-700',
         };
 
+        function format12h(t) {
+            if (!t) return '';
+            const [h, m] = t.split(':').map(Number);
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            const h12 = h % 12 === 0 ? 12 : h % 12;
+            return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+        }
+
         function notifTypeChip(type) {
             const label = notifTypeLabels[type] || type;
             const color = notifTypeColors[type] || 'bg-slate-100 text-slate-700';
@@ -178,7 +186,7 @@
                 const initial = (l.employee_name || 'E').charAt(0).toUpperCase();
                 const dateLabel = l.start_date === l.end_date ? l.start_date : `${l.start_date} &rarr; ${l.end_date}`;
                 const partialInfo = l.leave_type === 'partial' && l.partial_from && l.partial_to
-                    ? ` <span class="text-slate-400">(${l.partial_hours}h ${l.partial_from}-${l.partial_to})</span>` : '';
+                    ? ` <span class="text-slate-400">(${l.partial_hours}h ${format12h(l.partial_from)}-${format12h(l.partial_to)})</span>` : '';
                 return `
                 <div class="flex items-start space-x-3 px-4 py-3 hover:bg-slate-50/80 transition">
                     <div class="w-8 h-8 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-bold text-xs shrink-0">${initial}</div>

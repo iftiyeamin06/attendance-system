@@ -214,6 +214,14 @@
         let officeStartMinutes = 540;
         let officeEndMinutes = 1020;
 
+        function format12h(t) {
+            if (!t) return '';
+            const [h, m] = t.split(':').map(Number);
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            const h12 = h % 12 === 0 ? 12 : h % 12;
+            return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+        }
+
         async function loadOfficeTimes() {
             try {
                 const response = await fetchWithAuth(`${API_BASE}/admin/settings/office-time`);
@@ -334,7 +342,7 @@
                     let partialInfo = '';
                     if (leave.leave_type === 'partial') {
                         const label = leave.partial_label || 'Partial';
-                        partialInfo = `<span class="text-xs font-semibold text-purple-600"><i class="fa-regular fa-clock mr-1"></i>${leave.partial_hours}h (${leave.partial_from} - ${leave.partial_to}) &middot; ${label}</span>`;
+                        partialInfo = `<span class="text-xs font-semibold text-purple-600"><i class="fa-regular fa-clock mr-1"></i>${leave.partial_hours}h (${format12h(leave.partial_from)} - ${format12h(leave.partial_to)}) &middot; ${label}</span>`;
                     }
 
                     const empInitial = (leave.employee_name || 'E').charAt(0).toUpperCase();
