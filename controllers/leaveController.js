@@ -309,7 +309,7 @@ async function getPendingLeaveNotifications(req, res) {
     const leaves = await Leave.findAll({
       where: { status: 'Pending' },
       include: [{ model: User, as: 'user', attributes: ['id', 'name', 'email'] }],
-      order: [['createdAt', 'ASC']],
+      order: [['createdAt', 'DESC']],
       limit: 15,
     });
 
