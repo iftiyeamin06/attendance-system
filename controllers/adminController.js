@@ -291,7 +291,14 @@ async function adminDashboard(req, res) {
     const graceMinutes = graceSetting ? parseInt(graceSetting.value) : 10;
 
     if (!dailyLogs) {
-      const logs = await AttendanceLog.findAll({
+      // ponytail: include active overnight shift from yesterday so dashboard doesn't go empty at noon; full fix would make todayStr shift-aware
+      const yesterdayStr = addDaysToYmd(todayStr, -1);
+      const activeOvernightLogs = await AttendanceLog.findAll({
+        where: { clockOutTime: null, shiftDate: yesterdayStr, isManual: false },
+        include: [{ model: User, as: 'user', attributes: ['id', 'name', 'email'] }],
+        order: [['clockInTime', 'DESC']],
+      });
+      const todayLogs = await AttendanceLog.findAll({
         where: {
           // Attribute each log to the calendar day its clock-in happened on.
           // shiftDate is not included: for overnight shifts a 1 AM clock-in has
@@ -312,6 +319,9 @@ async function adminDashboard(req, res) {
         ],
         order: [['clockInTime', 'DESC']],
       });
+      // Merge active overnight from yesterday so dashboard not empty after 12pm
+      const merged = [...activeOvernightLogs, ...todayLogs];
+      const logs = Array.from(new Map(merged.map(l => [l.id, l])).values());
 
       const logIds = logs.map(l => l.id);
       const partialLeaves = await require('../models').Leave.findAll({
@@ -333,11 +343,13 @@ async function adminDashboard(req, res) {
         const partialLeave = partialByUser[uid] || null;
 
         const clockInTime = log.clockInTime ? new Date(log.clockInTime) : null;
-        const [startHour, startMin] = officeStartTime.split(':').map(Number);
+        const snapStart = log.officeStartSnapshot || officeStartTime;
+        const [startHour, startMin] = snapStart.split(':').map(Number);
         let isLate = false;
         let lateMinutes = 0;
         if (clockInTime) {
-          const shiftDate = log.shiftDate || computeShiftDate(clockInTime);
+          const snapEndHour = log.officeEndSnapshot ? parseInt(log.officeEndSnapshot.split(':')[0], 10) : null;
+          const shiftDate = log.shiftDate || computeShiftDate(clockInTime, snapEndHour);
           const deadline = new Date(deadlineEpoch(shiftDate, startHour, startMin + graceMinutes));
           isLate = clockInTime > deadline;
           lateMinutes = isLate ? Math.floor((clockInTime - deadline) / 60000) : 0;
@@ -564,6 +576,21 @@ async function updateOfficeTime(req, res) {
     }
     if (grace_period_minutes !== undefined) {
       await Setting.upsert({ key: 'grace_period_minutes', value: String(grace_period_minutes) });
+    }
+
+    if (office_end_time !== undefined) {
+      const newEndHour = parseInt(office_end_time.split(':')[0], 10);
+      const activeLogs = await AttendanceLog.findAll({ where: { clockOutTime: null, isManual: false } });
+      for (const log of activeLogs) {
+        const newShiftDate = computeShiftDate(new Date(log.clockInTime), newEndHour);
+        if (newShiftDate !== log.shiftDate) {
+          const oldDate = log.shiftDate;
+          log.shiftDate = newShiftDate;
+          await log.save();
+          if (oldDate) await cache.del(`daily_summary:${oldDate}`);
+          await cache.del(`daily_summary:${newShiftDate}`);
+        }
+      }
     }
 
     return res.json({
@@ -922,8 +949,10 @@ async function exportCsv(req, res) {
       const date = log.shiftDate || (log.clockInTime ? localDateStr(log.clockInTime) : '');
       let late = 'No';
       if (log.clockInTime && date) {
+        const snapStart = log.officeStartSnapshot || officeStartTime;
+        const [snapH, snapM] = snapStart.split(':').map(Number);
         const clockInEpoch = new Date(log.clockInTime).getTime();
-        const deadline = deadlineEpoch(date, startH, startM + graceMinutes);
+        const deadline = deadlineEpoch(date, snapH, snapM + graceMinutes);
         if (clockInEpoch > deadline) {
           const lateMin = Math.floor((clockInEpoch - deadline) / 60000);
           late = `Yes (${lateMin} min)`;
@@ -1083,7 +1112,9 @@ async function getEmployeeMonthlySummary(req, res) {
 
         if (clockIn) {
           const shiftDate = dayLog.shiftDate || localDateStr(new Date(clockIn));
-          const deadline = new Date(deadlineEpoch(shiftDate, startH, startM + graceMinutes));
+          const snapStart = dayLog.officeStartSnapshot || officeStart;
+          const [snapH, snapM] = snapStart.split(':').map(Number);
+          const deadline = new Date(deadlineEpoch(shiftDate, snapH, snapM + graceMinutes));
           if (new Date(clockIn) > deadline) {
             isLate = true;
             lateMin = Math.floor((new Date(clockIn) - deadline) / 60000);
@@ -1362,7 +1393,9 @@ async function getAllEmployeesMonthlySummary(req, res) {
             kpiTotalOnTime++;
           } else if (clockIn) {
             const shiftDate = dayLog.shiftDate || localDateStr(clockIn);
-            const deadline = new Date(deadlineEpoch(shiftDate, startH, startM + graceMinutes));
+            const snapStart = dayLog.officeStartSnapshot || officeStartTime;
+            const [snapH, snapM] = snapStart.split(':').map(Number);
+            const deadline = new Date(deadlineEpoch(shiftDate, snapH, snapM + graceMinutes));
             const isLate = clockIn > deadline;
             if (isLate) {
               lateCount++;
@@ -1536,7 +1569,9 @@ const partialLeaves = leaves.filter(l => l.leaveType === 'partial');
           } else if (dayLog.manualStatus === 'PRESENT') {
             present++;
           } else if (clockIn) {
-            const deadline = new Date(deadlineEpoch(dateStr, startH, startM + graceMinutes));
+            const snapStart = dayLog.officeStartSnapshot || officeStartTime;
+            const [snapH, snapM] = snapStart.split(':').map(Number);
+            const deadline = new Date(deadlineEpoch(dateStr, snapH, snapM + graceMinutes));
             if (clockIn > deadline) {
               lateCount++;
             } else {
@@ -1693,8 +1728,11 @@ async function buildDailyReportData(dateStr) {
         status = log.status === 'REJECTED' ? 'REJECTED' : 'VERIFIED';
         if (clockIn) {
           const clockInDate = new Date(clockIn);
-          const shiftDate = log.shiftDate || computeShiftDate(clockInDate);
-          const logDeadline = new Date(deadlineEpoch(shiftDate, startH, startM + graceMinutes));
+          const snapEndHour = log.officeEndSnapshot ? parseInt(log.officeEndSnapshot.split(':')[0], 10) : null;
+          const shiftDate = log.shiftDate || computeShiftDate(clockInDate, snapEndHour);
+          const snapStart = log.officeStartSnapshot || officeStartTime;
+          const [snapH, snapM] = snapStart.split(':').map(Number);
+          const logDeadline = new Date(deadlineEpoch(shiftDate, snapH, snapM + graceMinutes));
           isLate = clockInDate > logDeadline;
           lateMinutes = isLate ? Math.floor((clockInDate - logDeadline) / 60000) : 0;
         }

@@ -37,6 +37,16 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true,
         field: 'shift_date',
       },
+      officeStartSnapshot: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        field: 'office_start_snapshot',
+      },
+      officeEndSnapshot: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        field: 'office_end_snapshot',
+      },
       ipAddress: {
         type: DataTypes.STRING,
         allowNull: false,

@@ -126,16 +126,18 @@ function zonedDayRange(date, timeZone = ATTENDANCE_TIME_ZONE) {
   return { start, end };
 }
 
-function computeShiftDate(date) {
+function computeShiftDate(date, officeEndHour, officeStartHour) {
   const { year, month, day, hour } = getZonedDateParts(date);
   const shifted = new Date(Date.UTC(year, month - 1, day));
-
-  // Shifts starting before noon are the previous day. For 9 PM-5 AM shifts,
-  // any clock-in before noon belongs to today's (previous) shift.
-  if (hour < 12) {
-    shifted.setUTCDate(shifted.getUTCDate() - 1);
+  // ponytail: default 12 keeps legacy tests green; pass officeEndHour for overnight-aware cutoff
+  const endH = officeEndHour != null ? Number(officeEndHour) : 12;
+  const startH = officeStartHour != null ? Number(officeStartHour) : 9;
+  const overnight = endH * 60 <= startH * 60;
+  if (overnight) {
+    if (hour < endH) shifted.setUTCDate(shifted.getUTCDate() - 1);
+  } else {
+    if (hour < 12) shifted.setUTCDate(shifted.getUTCDate() - 1);
   }
-
   return formatYmd(shifted.getUTCFullYear(), shifted.getUTCMonth() + 1, shifted.getUTCDate());
 }
 

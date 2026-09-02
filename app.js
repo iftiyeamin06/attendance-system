@@ -399,6 +399,12 @@ async function startServer() {
       await sequelize.query(
         'ALTER TABLE attendance_logs ADD COLUMN IF NOT EXISTS notes TEXT'
       );
+      await sequelize.query(
+        'ALTER TABLE attendance_logs ADD COLUMN IF NOT EXISTS office_start_snapshot VARCHAR(255)'
+      );
+      await sequelize.query(
+        'ALTER TABLE attendance_logs ADD COLUMN IF NOT EXISTS office_end_snapshot VARCHAR(255)'
+      );
 
       // Allow null admin_id in audit_logs (e.g., system-initiated auto-close)
       await sequelize.query(

@@ -11,8 +11,10 @@ async function clockIn(req, res) {
     const user = req.user;
     const deviceUuid = req.headers['x-device-uuid'];
     const clientIp = extractClientIp(req);
+    const officeTimesNow = await getOfficeTimes();
+    const officeEndHourNow = parseInt(officeTimesNow.end.split(':')[0], 10);
     const todayStr = localDateStr(new Date());
-    const shiftDate = computeShiftDate(new Date());
+    const shiftDate = computeShiftDate(new Date(), officeEndHourNow);
 
     const todayLeave = await Leave.findOne({
       where: {
@@ -38,7 +40,8 @@ async function clockIn(req, res) {
 
       let autoClosedLog = null;
       if (activeLog) {
-        const activeShift = activeLog.shiftDate || computeShiftDate(new Date(activeLog.clockInTime));
+        const activeEndHour = activeLog.officeEndSnapshot ? parseInt(activeLog.officeEndSnapshot.split(':')[0], 10) : officeEndHourNow;
+        const activeShift = activeLog.shiftDate || computeShiftDate(new Date(activeLog.clockInTime), activeEndHour);
         if (activeShift === shiftDate) {
           const err = new Error('ALREADY_CLOCKED_IN');
           err.code = 'ALREADY_CLOCKED_IN';
@@ -64,6 +67,8 @@ async function clockIn(req, res) {
         ipAddress: clientIp,
         deviceIdUsed: deviceUuid,
         status: 'VERIFIED',
+        officeStartSnapshot: officeTimesNow.start,
+        officeEndSnapshot: officeTimesNow.end,
       }, { transaction: t });
 
       return { log, autoClosedLog };

@@ -31,8 +31,14 @@ async function autoCloseStaleLogs() {
   let closed = 0;
 
   for (const log of staleLogs) {
-    const shiftDate = log.shiftDate || computeShiftDate(new Date(log.clockInTime));
-    const shiftEndMs = shiftEndEpoch(shiftDate, officeTimes.start, officeTimes.end);
+    const snapStart = log.officeStartSnapshot || officeTimes.start;
+    const snapEnd = log.officeEndSnapshot || officeTimes.end;
+    if (!log.officeStartSnapshot || !log.officeEndSnapshot) {
+      console.warn(`[autoClose] log ${log.id} missing snapshots, falling back to live office times`);
+    }
+    const snapEndHour = snapEnd ? parseInt(snapEnd.split(':')[0], 10) : null;
+    const shiftDate = log.shiftDate || computeShiftDate(new Date(log.clockInTime), snapEndHour);
+    const shiftEndMs = shiftEndEpoch(shiftDate, snapStart, snapEnd);
     const shiftEnd = new Date(shiftEndMs);
     const now = new Date();
 
