@@ -166,11 +166,22 @@ async function deviceValidationMiddleware(req, res, next) {
   }
 
   if (!verifyDeviceSecret(presentedSecret, user.deviceSecretHash)) {
-    return res.status(403).json({
-      success: false,
-      message: 'Device verification failed. Please re-register your device.',
-      error_code: 'DEVICE_SECRET_MISMATCH',
-    });
+    // Same device but secret stale/missing (localStorage cleared, new session).
+    // IP already validated and UUID matches bound device, so reissue as recovery.
+    // ponytail: per-request reissue, rotate to per-day or add rate-limit if abused
+    const newSecret = generateDeviceSecret();
+    user.deviceSecretHash = hashDeviceSecret(newSecret);
+    await user.save();
+    setTrustOnResponse(res, user.id, deviceUuid);
+    req.deviceValidationResult = {
+      valid: true,
+      trustLevel: 'recovered',
+      reason: 'SECRET_MISMATCH_REISSUED',
+      deviceId: deviceUuid,
+      registeredDeviceId: boundDeviceId,
+      deviceSecret: newSecret,
+    };
+    return next();
   }
 
   setTrustOnResponse(res, user.id, deviceUuid);
