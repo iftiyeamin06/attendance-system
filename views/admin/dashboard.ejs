@@ -90,6 +90,7 @@
                     <div>
                         <h2 class="text-sm font-bold text-slate-900 tracking-tight">Today's Attendance Logs</h2>
                         <p class="text-xs text-slate-400 mt-0.5">Click employee row to view full monthly attendance summary</p>
+                        <p id="overnight-helper" class="hidden text-[11px] font-semibold text-indigo-600 mt-1"><i class="fa-solid fa-moon mr-1"></i>Showing overnight shifts from yesterday that closed today</p>
                     </div>
                 </div>
 
@@ -594,7 +595,7 @@
                             </td>
                             <td class="py-3.5 px-4">
                                 <div class="font-semibold ${log.is_late ? 'text-amber-600' : 'text-slate-700'}">${log.clock_in_time ? formatDhakaTime(log.clock_in_time) : '—'}</div>
-                                <div class="text-[10px] text-slate-400 font-medium">Shift: ${log.shift_date || '—'}</div>
+                                <div class="text-[10px] text-slate-400 font-medium">Shift: ${log.shift_date || '—'}${(log.shift_date && log.clock_out_time && new Date(log.clock_out_time).toLocaleDateString('en-CA', {timeZone: 'Asia/Dhaka'}) !== log.shift_date) ? ' <span class="ml-1 inline-flex items-center px-1 py-0 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200" title="Overnight 20:00-05:00 shift that ended next day">Overnight</span>' : ''}</div>
                             </td>
                             <td class="py-3.5 px-4">
                                 <div class="font-semibold text-slate-700">${log.clock_out_time ? formatDhakaTime(log.clock_out_time) : '—'}</div>
@@ -607,6 +608,8 @@
                         </td>
                             </tr>
                     `}).join('');
+                    const hasOvernight = logs.some(l => l.shift_date && l.clock_out_time && new Date(l.clock_out_time).toLocaleDateString('en-CA', {timeZone: 'Asia/Dhaka'}) !== l.shift_date);
+                    document.getElementById('overnight-helper').classList.toggle('hidden', !hasOvernight);
                 }
 
                 const present = logs.filter(l => l.status === 'VERIFIED' && !l.is_late).length;
