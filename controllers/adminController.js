@@ -291,10 +291,17 @@ async function adminDashboard(req, res) {
     const graceMinutes = graceSetting ? parseInt(graceSetting.value) : 10;
 
     if (!dailyLogs) {
-      // ponytail: include active overnight shift from yesterday so dashboard doesn't go empty at noon; full fix would make todayStr shift-aware
+      // ponytail: include overnight shift from yesterday (active or closed today) so dashboard not empty after noon; full fix would be shift-aware todayStr
       const yesterdayStr = addDaysToYmd(todayStr, -1);
       const activeOvernightLogs = await AttendanceLog.findAll({
-        where: { clockOutTime: null, shiftDate: yesterdayStr, isManual: false },
+        where: {
+          shiftDate: yesterdayStr,
+          isManual: false,
+          [Op.or]: [
+            { clockOutTime: null },
+            { clockOutTime: { [Op.gte]: dayStart, [Op.lte]: dayEnd } },
+          ],
+        },
         include: [{ model: User, as: 'user', attributes: ['id', 'name', 'email'] }],
         order: [['clockInTime', 'DESC']],
       });

@@ -592,10 +592,13 @@
                                     </div>
                                 </div>
                             </td>
-                            <td class="py-3.5 px-4 font-semibold ${log.is_late ? 'text-amber-600' : 'text-slate-700'}">${log.clock_in_time ? formatDhakaTime(log.clock_in_time) : '—'}</td>
-                            <td class="py-3.5 px-4 font-semibold text-slate-700">
-                                ${log.clock_out_time ? formatDhakaTime(log.clock_out_time) : '—'}
-                                ${log.is_auto_closed ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200" title="Auto-closed by system due to missing clock-out"><i class="fa-solid fa-clock-rotate-left mr-0.5"></i>Auto-Closed</span>' : ''}
+                            <td class="py-3.5 px-4">
+                                <div class="font-semibold ${log.is_late ? 'text-amber-600' : 'text-slate-700'}">${log.clock_in_time ? formatDhakaTime(log.clock_in_time) : '—'}</div>
+                                <div class="text-[10px] text-slate-400 font-medium">Shift: ${log.shift_date || '—'}</div>
+                            </td>
+                            <td class="py-3.5 px-4">
+                                <div class="font-semibold text-slate-700">${log.clock_out_time ? formatDhakaTime(log.clock_out_time) : '—'}</div>
+                                ${log.is_auto_closed ? '<span class="mt-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200" title="Auto-closed by system due to missing clock-out"><i class="fa-solid fa-clock-rotate-left mr-0.5"></i>Auto-Closed</span>' : ''}
                             </td>
                             <td class="py-3.5 px-4 font-mono text-xs text-slate-500">${isOnLeave ? '—' : log.ip_address}</td>
                             <td class="py-3.5 px-4 font-mono text-xs text-slate-500">${isOnLeave ? '—' : (log.device_id ? log.device_id.substring(0,12) + '...' : '—')}</td>
