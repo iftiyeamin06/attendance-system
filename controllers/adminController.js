@@ -296,7 +296,6 @@ async function adminDashboard(req, res) {
       const activeOvernightLogs = await AttendanceLog.findAll({
         where: {
           shiftDate: yesterdayStr,
-          isManual: false,
           [Op.or]: [
             { clockOutTime: null },
             { clockOutTime: { [Op.gte]: dayStart, [Op.lte]: dayEnd } },
@@ -716,6 +715,7 @@ async function addManualPunch(req, res) {
         where: { userId: user_id, shiftDate: shift_date },
       });
 
+      const officeTimesForPunch = await (require('./leaveController')).getOfficeTimes();
       const fields = {
         clockInTime,
         clockOutTime,
@@ -723,6 +723,8 @@ async function addManualPunch(req, res) {
         editReason: String(reason).trim(),
         editedBy: req.user.name || req.user.email || 'Admin',
         editedAt: new Date(),
+        officeStartSnapshot: officeTimesForPunch.start,
+        officeEndSnapshot: officeTimesForPunch.end,
       };
 
       let log;
