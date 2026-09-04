@@ -595,7 +595,7 @@
                             </td>
                             <td class="py-3.5 px-4">
                                 <div class="font-semibold ${log.is_late ? 'text-amber-600' : 'text-slate-700'}">${log.clock_in_time ? formatDhakaTime(log.clock_in_time) : '—'}</div>
-                                <div class="text-[10px] text-slate-400 font-medium">Shift: ${log.shift_date || '—'}${(log.shift_date && log.clock_out_time && new Date(log.clock_out_time).toLocaleDateString('en-CA', {timeZone: 'Asia/Dhaka'}) !== log.shift_date) ? ' <span class="ml-1 inline-flex items-center px-1 py-0 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200" title="Overnight 20:00-05:00 shift that ended next day">Overnight</span>' : ''}</div>
+                                <div class="text-xs text-slate-500 font-medium">Shift: ${log.shift_date || '—'}${(log.shift_date && log.clock_out_time && new Date(log.clock_out_time).toLocaleDateString('en-CA', {timeZone: 'Asia/Dhaka'}) !== log.shift_date) ? ' <span class="ml-1 inline-flex items-center px-1 py-0 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200" title="Overnight 20:00-05:00 shift that ended next day">Overnight</span>' : ''}</div>
                             </td>
                             <td class="py-3.5 px-4">
                                 <div class="font-semibold text-slate-700">${log.clock_out_time ? formatDhakaTime(log.clock_out_time) : '—'}</div>

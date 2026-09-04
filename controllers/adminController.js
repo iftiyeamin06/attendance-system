@@ -325,9 +325,10 @@ async function adminDashboard(req, res) {
         ],
         order: [['clockInTime', 'DESC']],
       });
-      // Merge active overnight from yesterday so dashboard not empty after 12pm
+      // Merge active overnight from yesterday so dashboard not empty after 12pm, then sort by most recent clockIn on top
       const merged = [...activeOvernightLogs, ...todayLogs];
-      const logs = Array.from(new Map(merged.map(l => [l.id, l])).values());
+      const deduped = Array.from(new Map(merged.map(l => [l.id, l])).values());
+      const logs = deduped.sort((a, b) => new Date(b.clockInTime) - new Date(a.clockInTime));
 
       const logIds = logs.map(l => l.id);
       const partialLeaves = await require('../models').Leave.findAll({
