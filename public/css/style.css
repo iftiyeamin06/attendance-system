@@ -294,43 +294,4 @@ input:focus, select:focus, textarea:focus {
   background-size: 24px 24px;
 }
 
-/* Dark mode */
-html.dark {
-  --bg-main: #0f172a;
-  --surface: #1e293b;
-  --text-heading: #f1f5f9;
-  --text-body: #cbd5e1;
-  --text-muted: #64748b;
-  --border: #334155;
-  --border-soft: #1e293b;
-  --status-inactive-bg: #334155;
-  --status-inactive-border: #475569;
-  color-scheme: dark;
-}
 
-html.dark body {
-  background-color: var(--bg-main);
-  color: var(--text-body);
-}
-
-html.dark .glass-nav {
-  background: rgba(15, 23, 42, 0.85);
-  border-bottom-color: #334155;
-}
-
-html.dark .surface-card,
-html.dark .card-kpi {
-  background: var(--surface);
-  border-color: var(--border);
-}
-
-html.dark table tbody tr:hover {
-  background-color: #1e293b;
-}
-
-html.dark ::-webkit-scrollbar-thumb {
-  background: #475569;
-}
-html.dark ::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
-}

@@ -10,7 +10,6 @@
     <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>tailwind.config={darkMode:'class'};if(localStorage.getItem('theme')==='dark'||(!localStorage.getItem('theme')&&window.matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark');</script>
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body class="bg-slate-50 text-slate-600 min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
@@ -23,7 +22,7 @@
         <div class="bg-white border border-slate-200 p-8 rounded-2xl shadow-lg shadow-slate-200/60">
             <!-- Header Logo -->
             <div class="text-center mb-8">
-                <img src="/logo.png" alt="Paragon Connect" class="w-32 h-16 object-contain mx-auto mb-4">
+                <img src="/logo.png" alt="Paragon Connect" class="h-16 w-auto max-w-[320px] object-contain mx-auto mb-4 bg-white rounded-xl px-3 py-2 shadow-sm">
                 <h1 class="text-xl font-extrabold text-slate-900 tracking-tight">Attendance System</h1>
                 <p class="text-slate-400 text-xs mt-1 font-medium">Sign in to your workspaces</p>
             </div>
