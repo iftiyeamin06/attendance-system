@@ -7,8 +7,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config={darkMode:'class'};if(localStorage.getItem('theme')==='dark'||(!localStorage.getItem('theme')&&window.matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark');</script>
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body class="bg-slate-50 text-slate-600 min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
@@ -21,9 +23,7 @@
         <div class="bg-white border border-slate-200 p-8 rounded-2xl shadow-lg shadow-slate-200/60">
             <!-- Header Logo -->
             <div class="text-center mb-8">
-                <div class="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
-                    <i class="fa-solid fa-clock-rotate-left text-indigo-400 text-xl"></i>
-                </div>
+                <img src="/logo.svg" alt="AMS" class="w-24 h-24 rounded-2xl mx-auto mb-4 shadow-sm">
                 <h1 class="text-xl font-extrabold text-slate-900 tracking-tight">Attendance System</h1>
                 <p class="text-slate-400 text-xs mt-1 font-medium">Sign in to your workspaces</p>
             </div>
