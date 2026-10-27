@@ -1,176 +1,120 @@
-# Attendance System
+# Employee Attendance Management System
 
-Single-Office Employee Attendance System with **Device Binding** + **IP Matching** - eliminating proxy check-ins and offsite clock-ins.
+A practical attendance tracking system built to solve a specific problem: preventing buddy-punching and off-site check-ins without requiring hardware tokens or GPS tracking.
 
-## Features
+## Why This Exists
 
-- **2-Layer Security Verification:**
-  1. Office IP Matching - clocks only allowed from configured office IP
-  2. Device Binding - each employee restricted to their registered physical device
+Most attendance systems either trust the client entirely (easy to spoof) or require dedicated hardware (expensive). This project takes a middle ground: device fingerprinting + IP allowlisting. An employee registers their browser/device once. After that, check-ins only succeed if the request comes from that same device and the office's public IP. No mobile app install, no location permissions — just a couple of HTTP headers and a stored hash.
 
-- **Tech Stack:**
-  - Node.js + Express API
-  - Sequelize ORM with SQLite/PostgreSQL
-  - Redis caching (with in-memory fallback)
-  - JWT authentication
-  - EJS templates for Admin & Employee UI
-  - Tailwind CSS
+## Live Demo & Test Credentials
 
-## Quick Start
-
-```bash
-# Install dependencies
-npm install
-
-# Run migrations locally
-npm run migrate
-
-# Start the server
-npm start
-
-# Run tests
-npm test
-```
-
-## Default Credentials
+**URL:** [https://attendance-system-rc2e.onrender.com](https://attendance-system-rc2e.onrender.com)
 
 | Role | Email | Password |
-|------|-------|----------|
-| Admin | admin@attendance.local | admin123 |
-| Employee | employee@attendance.local | employee123 |
+| :--- | :--- | :--- |
+| **Employee** | `test@gmail.com` | `pass123` |
+| **Admin** | `superadmin@attendance.local` | `Superadmin#2026` |
 
-## API Endpoints
+> **Note:** The free-tier Render instance spins down after 15 minutes of inactivity. A GitHub Action pings `/api/health` every 14 minutes to keep it warm, but the first load after a cold start may take 10–15 seconds.
 
-### Authentication
-- `POST /api/auth/login` - Login and receive JWT token
+## Core Features
 
-### Device Registration
-- `POST /api/device/register` - Bind device to user account
-- `GET /api/device/status` - Check device binding status
+### Device & IP Binding (The Anti-Spoof Layer)
 
-### Attendance
-- `POST /api/attendance/clock-in` - Clock in (requires office IP + registered device)
-- `POST /api/attendance/clock-out` - Clock out
-- `GET /api/attendance/today` - Today's attendance status
-- `GET /api/attendance/logs` - Attendance history
+*   **First login:** Employee logs in normally. The server generates a cryptographically random `device_secret`, hashes it with `bcrypt`, and stores the hash in the user record. The plaintext secret is returned once in the response body and stored in the browser's `localStorage`.
+*   **Subsequent requests:** Every attendance API call (`/api/attendance/clock-in`, `clock-out`) must include the `device_secret` in a custom header (`X-Device-Secret`). The server re-hashes the provided secret and compares it to the stored hash.
+*   **IP validation:** In parallel, the server extracts the client's public IP (via `req.ip` with trust proxy enabled for Render's load balancer) and compares it against the `office_public_ip` setting stored in the database (editable by admins).
+*   **Result:** A request fails if either the device secret doesn't match or the IP isn't the office IP. Resetting a device binding requires admin action.
 
-### Admin Panel
-- `GET /api/admin/dashboard` - Attendance overview
-- `GET /api/admin/users` - List all employees
-- `POST /api/admin/users/:id/reset-device` - Reset device binding
-- `POST /api/admin/settings/ip` - Update office IP
-- `GET /api/admin/export` - Export CSV
+*This isn't foolproof against a determined attacker with physical access to the employee's machine, but it raises the bar significantly above "share your password with a coworker."*
 
-## Configuration
+### Night-Shift-Aware Time Calculation
 
-Copy `.env.example` to `.env` and adjust settings:
+Shifts that cross midnight (e.g., 22:00–06:00) break naive date math. The backend handles this by:
 
-```
-PORT=3000
-NODE_ENV=development
-ATTENDANCE_TIME_ZONE=Asia/Dhaka
-TZ=Asia/Dhaka
-JWT_SECRET=your-secret-key
-JWT_EXPIRES_IN=24h
-TRUST_PROXY=false
-OFFICE_PUBLIC_IP=your-office-public-ip
-REDIS_URL=redis://localhost:6379
-DATABASE_URL=postgresql://postgres:your-password@db.your-project.supabase.co:5432/postgres
-DATABASE_URL_POOLER=
-SUPABASE_POOLER_URL=
-USE_DATABASE_POOLER=false
-DATABASE_SSL=true
-DATABASE_POOL_MAX=5
-DATABASE_POOL_MIN=0
-DATABASE_POOL_ACQUIRE=30000
-DATABASE_POOL_IDLE=10000
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_PUBLISHABLE_KEY=your-publishable-key
-SUPABASE_SECRET_KEY=your-secret-key
-SUPABASE_JWKS_URL=https://your-project.supabase.co/auth/v1/.well-known/jwks.json
-```
+*   Storing `shift_start` and `shift_end` as `TIME` columns (no date component).
+*   When calculating worked hours, the logic checks: if `shift_end <= shift_start`, the shift spans two calendar days.
+*   Clock-in/clock-out timestamps are stored as `TIMESTAMPTZ` (UTC). Reporting queries convert to the configured timezone (`Asia/Dhaka` by default) and apply the shift boundary logic to attribute hours to the correct "attendance date" — which for a night shift is the start date, not the end date.
+*   **Auto-close cron job:** An hourly scheduler runs on startup and every hour thereafter, finds any open clock-ins past their shift end + grace period, closes them automatically, and logs an audit entry. This handles forgotten clock-outs without manual intervention.
 
-## Deploy To Supabase + Render
+### Other Features
 
-### 1. Create the Supabase database
+*   **Role-based access:** Admin dashboard (employee management, leave approvals, reports, settings) vs. Employee portal (clock in/out, leave requests, device status).
+*   **Leave management:** Employees submit leave requests; admins approve/reject with optional notes.
+*   **Monthly reports:** CSV export with daily totals, late/early flags, and overtime calculation.
+*   **Audit log:** Every state-changing action (device reset, IP change, leave decision, auto-close) is recorded with actor, timestamp, and before/after values.
 
-1. Create a Supabase project.
-2. Copy the Postgres connection string into `DATABASE_URL`.
-3. If you use the Supabase pooler, set `DATABASE_URL_POOLER` too.
-4. Set `USE_DATABASE_POOLER=true` if you want Render to use the pooler in production.
-5. Keep `DATABASE_SSL=true` so the app uses SSL in production.
+## Tech Stack
 
-### 2. Prepare Render
+| Layer | Choice | Why |
+| :--- | :--- | :--- |
+| **Runtime** | Node.js 20+ | LTS, native fetch, good DX |
+| **Framework** | Express.js | Minimal, unopinionated, easy to debug |
+| **ORM** | Sequelize | Mature Postgres support, migrations, associations |
+| **Database** | PostgreSQL (Supabase) | Free tier, connection pooling, auth integration if needed later |
+| **Auth** | JWT (stateless) + express-session (web views) | APIs stay stateless; server-rendered pages use cookies |
+| **Frontend** | EJS + Tailwind CDN | No build step, fast iteration, good enough for internal tools |
+| **Scheduler** | node-cron (in-process) | Simple, runs hourly via `bin/cron.js` |
+| **Cache** | Redis (Upstash) with in-memory fallback | Office IP caching; falls back to Map if Redis unavailable (`redis/cache.js`) |
+| **Deployment** | Render (web service) + GitHub Actions (keep-alive) | Free tier, auto-deploys from main, zero config |
 
-1. Connect your GitHub repository to Render.
-2. Use the included `render.yaml` blueprint or create a new Node web service.
-3. Set these environment variables in Render:
-  - `DATABASE_URL`
-  - `DATABASE_URL_POOLER` if you use it
-  - `SUPABASE_POOLER_URL` if you prefer that name
-  - `USE_DATABASE_POOLER=true` if you want to force the pooler
-  - `JWT_SECRET`
-  - `OFFICE_PUBLIC_IP`
-  - `SUPABASE_URL`
-  - `SUPABASE_PUBLISHABLE_KEY`
-  - `SUPABASE_SECRET_KEY`
-  - `SUPABASE_JWKS_URL`
-   - `ATTENDANCE_TIME_ZONE=Asia/Dhaka`
-   - `TZ=Asia/Dhaka`
-   - `TRUST_PROXY=true`
-   - `NODE_ENV=production`
-4. Set the start command to `npm run start:render`.
-5. Add `/api/health` as the health check path.
+## Deployment Notes
 
-### 3. Run migrations on first deploy
+*   **Render:** Web service, `npm run start:render` (runs migrations then starts server). Health check at `/api/health`.
+*   **Supabase:** Uses Transaction Pooler (port `6543`) with `?pgbouncer=true` because Render's IPv4-only egress can't reach Supabase's direct IPv6 endpoint.
+*   **Environment variables** (set in Render dashboard): `JWT_SECRET`, `DATABASE_URL` (pooler URL), `OFFICE_PUBLIC_IP`, `ATTENDANCE_TIME_ZONE`, `TRUST_PROXY=true`, `NODE_ENV=production`.
+*   **Keep-alive:** `.github/workflows/keep-alive.yml` runs `curl` against `/api/health` every 14 minutes via cron (`*/14 * * * *`). This prevents the free instance from spinning down.
 
-The Render start command runs `npm run migrate` before starting the server.
-That creates the tables and default users in Supabase Postgres.
+## Local Development
 
-### 4. Timezone behavior
+```bash
+# 1. Clone & install
+git clone https://github.com/iftiyeamin06/attendance-system.git
+cd attendance-system
+npm install
 
-The app now formats all attendance dates and reports in `Asia/Dhaka` by default.
-If you need a different timezone, change `ATTENDANCE_TIME_ZONE` and redeploy.
+# 2. Create .env with required variables
+# Required: JWT_SECRET, DATABASE_URL (local Postgres or Supabase pooler URL)
+# Optional: OFFICE_PUBLIC_IP, ATTENDANCE_TIME_ZONE, REDIS_URL, etc.
 
-### 5. Secret safety
+# 3. Run migrations & seed default users
+npm run migrate
 
-If any Supabase secret or database password was exposed outside your private environment, rotate it in Supabase and update Render immediately.
+# 4. Start dev server (nodemon)
+npm run dev
 
-## Project Structure
+### Default Local Users (created by `npm run migrate`)
+*   **Admin:** `admin@attendance.local` / `admin123`
+*   **Employee:** `employee@attendance.local` / `employee123`
 
-```
+### Project Structure (High Level)
+```text
 attendance-system/
-├── app.js              # Express server entry point
+├── app.js                 # Express entry point, middleware, routes, server bootstrap
+├── bin/
+│   ├── migrate.js         # One-time migration + seed script
+│   └── cron.js            # Auto-close scheduler (runs hourly)
 ├── config/
-│   └── database.js     # Sequelize config
-├── models/
-│   ├── index.js        # Sequelize initialization
-│   ├── user.js         # User model
-│   ├── setting.js      # Settings model
-│   └── attendanceLog.js
-├── controllers/
-│   ├── authController.js
-│   ├── deviceController.js
-│   ├── attendanceController.js
-│   └── adminController.js
-├── middleware/
-│   ├── auth.js         # JWT auth middleware
-│   ├── admin.js        # Admin role check
-│   ├── ipValidation.js # Office IP verification
-│   └── deviceValidation.js
+│   └── database.js        # Sequelize + pg pool config (SSL, pooler support)
+├── controllers/           # Request handlers (auth, device, attendance, admin, leave)
+├── middleware/            # Auth, admin check, IP validation, device validation, audit
+├── models/                # Sequelize models (User, Setting, AttendanceLog, Leave, Holiday, AuditLog)
+├── routes/                # API route definitions
+├── views/                 # EJS templates (admin/, employee/, auth/)
+├── public/                # Static assets (CSS, logos)
 ├── redis/
-│   └── cache.js        # Redis cache with fallback
-├── routes/
-│   ├── authRoutes.js
-│   ├── deviceRoutes.js
-│   ├── attendanceRoutes.js
-│   └── adminRoutes.js
-├── views/
-│   ├── auth/           # Login pages
-│   ├── admin/          # Admin dashboard
-│   └── employee/       # Employee UI
-├── public/             # CSS, JS static assets
-├── bin/migrate.js      # Database migration script
-├── test/run-tests.js   # API test suite
-└── docs/API.md         # Full API documentation
-```
+│   └── cache.js           # Redis client with in-memory fallback
+├── services/
+│   └── attendanceCleanup.js  # Auto-close logic used by cron
+├── test/                  # Integration tests
+├── .github/workflows/     # keep-alive.yml
+└── render.yaml            # Render blueprint (optional)
+
+Known Limitations
+Single-instance scheduler: The auto-close cron runs inside the web process. On a multi-instance deploy, you'd need a distributed lock or external scheduler (e.g., pg_cron, BullMQ).
+
+No rate limiting on device registration: An attacker who obtains valid credentials could register unlimited devices. Mitigation: short JWT expiry, admin audit log review.
+
+IP allowlist is single-entry: Only one office IP supported. Multi-office would need a many-to-many office_ips table.
+
+Device secret in localStorage: Vulnerable to XSS. CSP headers mitigate, but a compromised frontend could exfiltrate secrets.
