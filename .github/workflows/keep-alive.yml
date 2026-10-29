@@ -11,4 +11,4 @@ jobs:
     steps:
       - name: Ping Render health endpoint
         run: |
-          curl -fsS --max-time 30 https://attendance-system-rc2e.onrender.com/api/health
+          curl -fsS --max-time 90 https://attendance-system-rc2e.onrender.com/api/health
